@@ -1,0 +1,480 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: auth.uid
+    // Fields:
+    //   - name: string
+    //   - email: string
+    //   - role: string (admin, staff, user)
+    //   - photoURL: string
+    //
+    // Collection: quotes
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - email: string (required, valid email)
+    //   - phone: string (optional)
+    //   - message: string (required, 1-1000 chars)
+    //   - status: string (required, enum: pending, contacted, completed)
+    //   - createdAt: timestamp (required)
+    //   - userId: string (optional, matches auth.uid)
+    //
+    // Collection: products
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required)
+    //   - category: string (required)
+    //   - description: string (optional)
+    //   - price: number (required, positive)
+    //   - imageUrl: string (optional, valid URL)
+    //   - featured: bool (optional)
+    //
+    // Collection: orders
+    // Document ID: auto-generated
+    // Fields:
+    //   - customerName: string (required)
+    //   - email: string (required, valid email)
+    //   - status: string (required, enum: pending, shipped, delivered)
+    //   - createdAt: timestamp (required)
+    //   - userId: string (optional)
+    //
+    // Collection: crm_interactions
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string
+    //   - email: string
+    //   - phone: string
+    //   - message: string
+    //   - status: string (pending, contacted, resolved)
+    //   - createdAt: timestamp
+    //
+    // Collection: audit_logs
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string
+    //   - userEmail: string
+    //   - action: string
+    //   - details: string
+    //   - device: string
+    //   - createdAt: timestamp
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "anshsinghal1500@gmail.com" || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidQuote(data) {
+      return data.keys().hasAll(['name', 'email', 'message', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 2000 &&
+             data.status in ['pending', 'contacted', 'completed', 'ordered', 'revision_requested'] &&
+             data.createdAt is timestamp &&
+             (!('phone' in data) || data.phone is string || data.phone == null) &&
+             (!('userId' in data) || data.userId is string || data.userId == null) &&
+             (!('lastUpdated' in data) || data.lastUpdated is timestamp) &&
+             (!('orderedAt' in data) || data.orderedAt is timestamp) &&
+             (!('formalQuote' in data) || data.formalQuote is map);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'category', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.category is string &&
+             data.price is number && data.price > 0;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['status', 'items', 'total']) &&
+             (!('customerName' in data) || data.customerName is string) &&
+             (!('email' in data) || data.email is string) &&
+             data.status in ['pending', 'shipped', 'delivered', 'return_requested', 'refunded', 'cancelled'] &&
+             (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt is string) &&
+             data.items is list &&
+             (data.total is number || data.total is string) &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('address' in data) || data.address is string) &&
+             (!('city' in data) || data.city is string) &&
+             (!('pincode' in data) || data.pincode is string) &&
+             (!('paymentMethod' in data) || data.paymentMethod is string) &&
+             (!('deliveryDate' in data) || data.deliveryDate is string) &&
+             (!('quoteId' in data) || data.quoteId is string) &&
+             (!('userId' in data) || data.userId is string || data.userId == null) &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('subtotal' in data) || data.subtotal is number || data.subtotal is string) &&
+             (!('gst' in data) || data.gst is number || data.gst is string) &&
+             (!('internalNotes' in data) || data.internalNotes is list) &&
+             (!('timeline' in data) || data.timeline is list) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+             (!('shipping' in data) || data.shipping is map) &&
+             (!('parentOrderId' in data) || data.parentOrderId is string);
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['userId', 'productId']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.productId is string &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('productTitle' in data) || data.productTitle is string);
+    }
+
+    function isValidInvoice(data) {
+      return data.keys().hasAll(['total', 'status']) &&
+             (!('customerName' in data) || data.customerName is string) &&
+             (!('email' in data) || data.email is string) &&
+             (data.total is number || data.total is string) &&
+             data.status in ['draft', 'sent', 'paid', 'partial', 'pending'] &&
+             (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt is string) &&
+             (!('quoteId' in data) || data.quoteId is string || data.quoteId == null) &&
+             (!('orderId' in data) || data.orderId is string || data.orderId == null) &&
+             (!('userId' in data) || data.userId is string || data.userId == null) &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('address' in data) || data.address is string) &&
+             (!('city' in data) || data.city is string) &&
+             (!('pincode' in data) || data.pincode is string) &&
+             (!('items' in data) || data.items is list) &&
+             (!('subtotal' in data) || data.subtotal is number) &&
+             (!('discount' in data) || data.discount is number) &&
+             (!('discountAmount' in data) || data.discountAmount is number) &&
+             (!('discountType' in data) || data.discountType in ['percentage', 'fixed']) &&
+             (!('taxRate' in data) || data.taxRate is number) &&
+             (!('taxAmount' in data) || data.taxAmount is number) &&
+             (!('paidAmount' in data) || data.paidAmount is number) &&
+             (!('payments' in data) || data.payments is list) &&
+             (!('dueDate' in data) || data.dueDate is string) &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('isRecurring' in data) || data.isRecurring is bool) &&
+             (!('frequency' in data) || data.frequency in ['monthly', 'quarterly', 'yearly']) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidMedia(data) {
+      return data.keys().hasAll(['name', 'type', 'size', 'url', 'createdAt', 'userId']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.type is string &&
+             data.size is number && data.size > 0 &&
+             data.url is string && data.url.size() > 0 &&
+             data.createdAt is timestamp &&
+             data.userId is string;
+    }
+
+    function isValidVisitor(data) {
+      return data.keys().hasAll(['id', 'lastActive']) &&
+             data.id is string &&
+             data.lastActive is timestamp &&
+             (!('city' in data) || data.city is string) &&
+             (!('page' in data) || data.page is string) &&
+             (!('device' in data) || data.device is string) &&
+             (!('action' in data) || data.action is string) &&
+             (!('duration' in data) || data.duration is number);
+    }
+
+    function isValidInteraction(data) {
+      return data.keys().hasAll(['name', 'message', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.message is string && data.message.size() > 0 &&
+             data.status in ['pending', 'contacted', 'resolved'] &&
+             data.createdAt is timestamp &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('aiScore' in data) || data.aiScore is number) &&
+             (!('aiSentiment' in data) || data.aiSentiment is string) &&
+             (!('aiIntent' in data) || data.aiIntent is string) &&
+             (!('aiFollowUp' in data) || data.aiFollowUp is string) &&
+             (!('aiSegment' in data) || data.aiSegment is string);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['userId', 'userEmail', 'action', 'details', 'device', 'createdAt']) &&
+             data.userId is string &&
+             data.userEmail is string &&
+             data.action is string &&
+             data.details is string &&
+             data.device is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidInventory(data) {
+      return data.keys().hasAll(['name', 'sku', 'stock', 'minStock', 'category', 'status']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.sku is string && data.sku.size() > 0 &&
+             data.stock is number &&
+             data.minStock is number &&
+             data.category is string &&
+             data.status in ['in-stock', 'low-stock', 'out-of-stock'];
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll(['name', 'category', 'status']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.category is string &&
+             data.status in ['active', 'inactive'] &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('phone' in data) || data.phone is string);
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.status in ['active', 'inactive'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidPage(data) {
+      return data.keys().hasAll(['title', 'url', 'status', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.url is string && data.url.size() > 0 && data.url.size() <= 200 &&
+             data.status in ['draft', 'published'] &&
+             data.createdAt is timestamp &&
+             (!('author' in data) || data.author is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidBlogPost(data) {
+      return data.keys().hasAll(['title', 'category', 'status', 'content', 'author', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 500 &&
+             data.category is string &&
+             data.status in ['draft', 'published'] &&
+             data.content is string && data.content.size() > 0 &&
+             data.author is string &&
+             data.createdAt is timestamp &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+             (!('views' in data) || data.views is number);
+    }
+
+    function isValidCampaign(data) {
+      return data.keys().hasAll(['name', 'subject', 'content', 'targetAudience', 'status', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.subject is string && data.subject.size() > 0 &&
+             data.content is string &&
+             data.targetAudience is string &&
+             data.status in ['draft', 'scheduled', 'sent'] &&
+             data.createdAt is timestamp &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+             (!('scheduledAt' in data) || data.scheduledAt is string || data.scheduledAt == null) &&
+             (!('sentAt' in data) || data.sentAt is timestamp);
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['createdAt']) &&
+             data.createdAt is timestamp &&
+             (!('userName' in data) || data.userName is string) &&
+             (!('productName' in data) || data.productName is string) &&
+             (!('comment' in data) || data.comment is string && data.comment.size() <= 2000) &&
+             (!('rating' in data) || data.rating is number) &&
+             (!('status' in data) || data.status in ['pending', 'approved', 'rejected']) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['name', 'content', 'rating', 'status', 'featured', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 2000 &&
+             data.rating is number &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.featured is bool &&
+             data.createdAt is timestamp &&
+             (!('role' in data) || data.role is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['siteName', 'siteDescription', 'updatedAt']) &&
+             data.siteName is string &&
+             data.siteDescription is string &&
+             data.updatedAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /inventory/{itemId} {
+      allow read, list: if isAdmin();
+      allow create: if isAdmin() && isValidInventory(request.resource.data);
+      allow update: if isAdmin() && isValidInventory(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow read, list: if isAdmin();
+      allow create: if isAdmin() && isValidSupplier(request.resource.data);
+      allow update: if isAdmin() && isValidSupplier(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /blog_posts/{postId} {
+      allow read: if true;
+      allow list: if true;
+      allow create: if isAdmin() && isValidBlogPost(request.resource.data);
+      allow update: if isAdmin() && isValidBlogPost(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /campaigns/{campaignId} {
+      allow read, list: if isAdmin();
+      allow create: if isAdmin() && isValidCampaign(request.resource.data);
+      allow update: if isAdmin() && isValidCampaign(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /discounts/{discountId} {
+      allow read: if true;
+      allow list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow list: if true;
+      allow create: if isValidReview(request.resource.data); // Anyone can leave a review
+      allow update: if isAdmin() && isValidReview(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow list: if true;
+      allow create: if isAdmin() && isValidTestimonial(request.resource.data);
+      allow update: if isAdmin() && isValidTestimonial(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read, list, write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidSettings(request.resource.data);
+    }
+
+    match /roles/{roleId} {
+      allow read, list, write: if isAdmin();
+    }
+
+    match /quotes/{quoteId} {
+      // Anyone can create a quote request
+      allow create: if isValidQuote(request.resource.data) && 
+                    (
+                      !('userId' in request.resource.data) || 
+                      request.resource.data.userId == null || 
+                      (isAuthenticated() && request.resource.data.userId == request.auth.uid)
+                    );
+      
+      // Users can read their own quotes, admins can read/update all
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow list: if isAdmin();
+      
+      // Users can update their own quotes for status changes
+      allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid && isValidQuote(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      // Anyone can read products
+      allow read: if true;
+      
+      // Only admins can write products
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      // Users can read their own orders, admins can read all
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow list: if isAdmin();
+      
+      // Users can create their own orders, admins can create all
+      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidOrder(request.resource.data)) || isAdmin();
+      
+      allow update: if isAdmin() && isValidOrder(request.resource.data) &&
+                       (!('createdAt' in resource.data) || !('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
+                       (!('userId' in resource.data) || !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId);
+      allow delete: if isAdmin();
+    }
+
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidFavorite(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /invoices/{invoiceId} {
+      // Users can read their own invoices, admins can read all
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidInvoice(request.resource.data);
+      allow update: if isAdmin() && isValidInvoice(request.resource.data) &&
+                       (!('createdAt' in resource.data) || !('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+      allow delete: if isAdmin();
+    }
+
+    match /media/{mediaId} {
+      // Anyone can read media
+      allow read: if true;
+      allow create: if isAdmin() && isValidMedia(request.resource.data);
+      allow update: if isAdmin() && isValidMedia(request.resource.data) &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /visitors/{visitorId} {
+      allow read: if isAdmin();
+      allow create, update: if isValidVisitor(request.resource.data) && 
+                            request.resource.data.id == visitorId;
+      allow delete: if isAdmin();
+    }
+
+    match /pages/{pageId} {
+      allow read: if true;
+      allow list: if true;
+      allow create: if isAdmin() && isValidPage(request.resource.data);
+      allow update: if isAdmin() && isValidPage(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /crm_interactions/{interactionId} {
+      allow read, list, write: if isAdmin();
+      allow create: if isValidInteraction(request.resource.data);
+    }
+
+    match /audit_logs/{logId} {
+      allow read, list: if isAdmin();
+      allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+    }
+  }
+}

@@ -1,0 +1,34 @@
+export interface Product {
+  id?: string;
+  title: string;
+  description: string;
+  image: string;
+  bgColor: string;
+  brand: string;
+  category: string;
+  features?: string[];
+}
+
+export const anjulProducts: Product[] = [
+  // Apex Collection
+  { title: "AX-205 BIB COCK NOZZLE", description: "Premium bib cock with nozzle from the Apex Collection. Made with durable P.T.M.T material.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-blue-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "Polytetra Methylene Terephthalate (P.T.M.T)", "Durable & Long-lasting", "Elegant Design"] },
+  { title: "AX-206 BIB COCK WASHING M/C", description: "Washing machine bib cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-slate-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material", "Washing Machine Compatible"] },
+  { title: "AX-207 ANGLE COCK", description: "Angle cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-orange-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-210 STOP COCK MALE", description: "Male stop cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-emerald-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-201 BIB COCK LONG BODY", description: "Long body bib cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-blue-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-202 BIB COCK MAX", description: "Max bib cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-slate-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-203 BIB COCK", description: "Standard bib cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-orange-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-204 PILLAR COCK", description: "Pillar cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-emerald-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-251 BIB COCK LONG BODY FOAM FLOW", description: "Long body bib cock with foam flow from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-blue-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material", "Foam Flow"] },
+  { title: "AX-208 BIB COCK 2-IN-1", description: "2-in-1 bib cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-slate-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-209 ANGLE COCK 2-WAY", description: "2-way angle cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-orange-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-211 SINK COCK", description: "Sink cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-emerald-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-212 MINI SINK COCK", description: "Mini sink cock from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-blue-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-213 SWAN NECK", description: "Swan neck tap from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-slate-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-214 MINI SWAN NECK", description: "Mini swan neck tap from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-orange-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-215 CENTER HOLE BASIN MIXER", description: "Center hole basin mixer from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-emerald-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-216 SINK MIXER", description: "Sink mixer from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-blue-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-217 WALL MIXER NON-TELEPHONIC", description: "Wall mixer non-telephonic from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-slate-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+  { title: "AX-220 WALL MIXER TELEPHONIC", description: "Wall mixer telephonic from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-orange-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material", "With Crutch for Provision of Hand Shower"] },
+  { title: "AX-218 WALL MIXER WITH L-BEND", description: "Wall mixer with L-bend from the Apex Collection.", image: "https://images.unsplash.com/photo-1584622781564-1d987f7333c1?q=80&w=2070&auto=format&fit=crop", bgColor: "bg-emerald-50", brand: "Anjul", category: "Apex Collection", features: ["15 MM TAPS", "P.T.M.T Material"] },
+];
