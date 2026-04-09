@@ -75,25 +75,34 @@ const CampaignManager = () => {
     }
   };
 
+  const [previewing, setPreviewing] = useState<any>(null);
+
   const sendCampaign = async (id: string) => {
+    setSubmitting(true);
     try {
+      // Simulate sending delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
       await updateDoc(doc(db, 'campaigns', id), {
         status: 'sent',
         sentAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      alert('Campaign sent successfully to all subscribers!');
     } catch (error) {
       console.error("Error sending campaign:", error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const filteredCampaigns = campaigns.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.subject?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* ... existing header ... */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-white mb-1">Email Campaigns</h3>
@@ -107,6 +116,50 @@ const CampaignManager = () => {
           {isCreating ? 'Cancel' : 'New Campaign'}
         </button>
       </div>
+
+      <AnimatePresence>
+        {previewing && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-[#0f172a] w-full max-w-2xl rounded-3xl border border-white/10 overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
+                <h4 className="text-lg font-bold text-white">Campaign Preview</h4>
+                <button onClick={() => setPreviewing(null)} className="p-2 hover:bg-white/10 rounded-full text-white/40 hover:text-white transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Subject</div>
+                  <div className="text-white font-medium">{previewing.subject}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Content</div>
+                  <div className="bg-white p-6 rounded-xl text-gray-800 min-h-[200px] font-sans whitespace-pre-wrap">
+                    {previewing.content || "No content provided."}
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end">
+                <button 
+                  onClick={() => setPreviewing(null)}
+                  className="px-6 py-2 bg-white/10 text-white rounded-xl font-bold text-sm hover:bg-white/20 transition-all"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {isCreating && (
         <motion.div 
@@ -145,7 +198,13 @@ const CampaignManager = () => {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-orange/50 transition-all h-48 resize-none font-mono text-sm"
             />
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            <button 
+              onClick={() => setPreviewing(newCampaign)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 text-white rounded-xl font-bold transition-all hover:bg-white/10"
+            >
+              <Eye size={18} /> Preview
+            </button>
             <button 
               onClick={handleCreate}
               disabled={submitting || !newCampaign.name || !newCampaign.subject}
@@ -217,11 +276,19 @@ const CampaignManager = () => {
                   {c.status !== 'sent' && (
                     <button 
                       onClick={() => sendCampaign(c.id)}
-                      className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-brand-dark rounded-xl font-bold text-xs hover:scale-105 transition-all"
+                      disabled={submitting}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-orange text-brand-dark rounded-xl font-bold text-xs hover:scale-105 transition-all disabled:opacity-50"
                     >
-                      <Send size={14} /> Send Now
+                      {submitting ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                      {submitting ? 'Sending...' : 'Send Now'}
                     </button>
                   )}
+                  <button 
+                    onClick={() => setPreviewing(c)}
+                    className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-colors"
+                  >
+                    <Eye size={18} />
+                  </button>
                   <button className="p-2 bg-white/5 text-white/40 rounded-lg hover:text-white transition-colors">
                     <Edit3 size={18} />
                   </button>

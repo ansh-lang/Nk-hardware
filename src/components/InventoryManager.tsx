@@ -47,6 +47,7 @@ const InventoryManager = ({ onManageSuppliers }: InventoryManagerProps) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', sku: '', stock: 0, minStock: 0, category: 'Pipes' });
   const [submitting, setSubmitting] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const q = query(collection(db, 'inventory'), orderBy('name', 'asc'));
@@ -80,6 +81,18 @@ const InventoryManager = ({ onManageSuppliers }: InventoryManagerProps) => {
 
     return () => unsubscribe();
   }, []);
+
+  const handleBulkDelete = async () => {
+    try {
+      for (const id of selectedItems) {
+        await deleteDoc(doc(db, 'inventory', id));
+      }
+      await logAction('bulk_delete_inventory', `Deleted ${selectedItems.size} inventory items`);
+      setSelectedItems(new Set());
+    } catch (error) {
+      console.error("Error bulk deleting:", error);
+    }
+  };
 
   const handleAddStock = async () => {
     if (!newItem.name || !newItem.sku) return;
@@ -273,10 +286,37 @@ const InventoryManager = ({ onManageSuppliers }: InventoryManagerProps) => {
 
       {/* Inventory Table */}
       <div className="bg-[#0f172a] border border-white/5 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="p-4 flex items-center justify-between border-b border-white/5">
+          <div className="text-white/40 text-sm">
+            {selectedItems.size} items selected
+          </div>
+          {selectedItems.size > 0 && (
+            <button 
+              onClick={handleBulkDelete}
+              className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-red-500 hover:text-white transition-colors"
+            >
+              <Trash2 size={16} /> Delete Selected
+            </button>
+          )}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/5 bg-white/5">
+                <th className="px-6 py-4">
+                  <input 
+                    type="checkbox"
+                    checked={selectedItems.size === inventory.length && inventory.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedItems(new Set(inventory.map(i => i.id)));
+                      } else {
+                        setSelectedItems(new Set());
+                      }
+                    }}
+                    className="rounded border-white/10 bg-white/5 text-brand-orange focus:ring-brand-orange"
+                  />
+                </th>
                 <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-white/40 font-bold">Product / SKU</th>
                 <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-white/40 font-bold">Category</th>
                 <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-white/40 font-bold text-center">Stock Level</th>
@@ -287,20 +327,33 @@ const InventoryManager = ({ onManageSuppliers }: InventoryManagerProps) => {
             <tbody className="divide-y divide-white/5">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center">
+                  <td colSpan={6} className="py-20 text-center">
                     <Loader2 className="animate-spin mx-auto text-brand-orange mb-4" size={32} />
                     <p className="text-white/40">Loading inventory...</p>
                   </td>
                 </tr>
               ) : inventory.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center text-white/40">
+                  <td colSpan={6} className="py-20 text-center text-white/40">
                     No inventory items found.
                   </td>
                 </tr>
               ) : (
                 inventory.map((item) => (
                   <tr key={item.id} className="hover:bg-white/5 transition-colors group">
+                    <td className="px-6 py-4">
+                      <input 
+                        type="checkbox"
+                        checked={selectedItems.has(item.id)}
+                        onChange={(e) => {
+                          const newSet = new Set(selectedItems);
+                          if (e.target.checked) newSet.add(item.id);
+                          else newSet.delete(item.id);
+                          setSelectedItems(newSet);
+                        }}
+                        className="rounded border-white/10 bg-white/5 text-brand-orange focus:ring-brand-orange"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:text-brand-orange transition-colors">

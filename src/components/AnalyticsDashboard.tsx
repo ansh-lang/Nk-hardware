@@ -45,22 +45,53 @@ export const AnalyticsDashboard = () => {
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   const totalCustomers = users.filter(u => u.role !== 'admin').length;
 
-  // Monthly Data (Mocked for now as we don't have enough historical data, but structured for real data)
-  const monthlyData = [
-    { name: 'Jan', revenue: 4000, orders: 24 },
-    { name: 'Feb', revenue: 3000, orders: 19 },
-    { name: 'Mar', revenue: 2000, orders: 98 },
-    { name: 'Apr', revenue: 2780, orders: 39 },
-    { name: 'May', revenue: 1890, orders: 48 },
-    { name: 'Jun', revenue: 2390, orders: 38 },
-    { name: 'Jul', revenue: totalRevenue || 3490, orders: totalOrders || 43 },
-  ];
+  // Calculate Real Monthly Data from Orders
+  const getMonthlyData = () => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentYear = new Date().getFullYear();
+    
+    const data = months.map((month, index) => {
+      const monthlyOrders = orders.filter(order => {
+        const orderDate = order.createdAt?.toDate();
+        return orderDate && orderDate.getMonth() === index && orderDate.getFullYear() === currentYear;
+      });
 
-  const categoryData = [
-    { name: 'CPVC Pipes', value: 400, color: '#f97316' },
-    { name: 'UPVC Pipes', value: 300, color: '#3b82f6' },
-    { name: 'Sanitaryware', value: 300, color: '#10b981' },
-    { name: 'Fittings', value: 200, color: '#8b5cf6' },
+      return {
+        name: month,
+        revenue: monthlyOrders.reduce((acc, order) => acc + (order.total || 0), 0),
+        orders: monthlyOrders.length
+      };
+    });
+
+    // Return last 7 months including current
+    const currentMonth = new Date().getMonth();
+    return data.slice(Math.max(0, currentMonth - 6), currentMonth + 1);
+  };
+
+  const monthlyData = getMonthlyData();
+
+  // Calculate Real Category Data
+  const getCategoryData = () => {
+    const categories: { [key: string]: number } = {};
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          const cat = item.category || 'Uncategorized';
+          categories[cat] = (categories[cat] || 0) + 1;
+        });
+      }
+    });
+
+    const colors = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#eab308'];
+    return Object.entries(categories).map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[index % colors.length]
+    }));
+  };
+
+  const categoryData = getCategoryData().length > 0 ? getCategoryData() : [
+    { name: 'No Data', value: 1, color: '#334155' }
   ];
 
   if (loading) {
@@ -82,7 +113,20 @@ export const AnalyticsDashboard = () => {
           <button className="bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl border border-white/10 flex items-center gap-2 transition-all text-sm">
             <Calendar size={16} /> Last 30 Days
           </button>
-          <button className="bg-brand-orange hover:bg-brand-orange/90 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all text-sm font-bold">
+          <button 
+            onClick={() => {
+              const csvContent = "data:text/csv;charset=utf-8," 
+                + "ID,Customer,Email,Status,Total,Date\n"
+                + orders.map(o => `${o.id},${o.customerName},${o.email},${o.status},${o.total},${o.createdAt?.toDate().toLocaleDateString()}`).join("\n");
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", "analytics_report.csv");
+              document.body.appendChild(link);
+              link.click();
+            }}
+            className="bg-brand-orange hover:bg-brand-orange/90 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all text-sm font-bold"
+          >
             <Download size={16} /> Export Report
           </button>
         </div>

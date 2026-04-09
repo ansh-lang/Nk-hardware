@@ -161,6 +161,18 @@ export const OrderDashboard = () => {
       await addDoc(collection(db, 'invoices'), invoiceData);
       await updateStatus(order.id, 'delivered', 'Invoice generated and moved to Billing');
       await logAction('generate_invoice', `Invoice generated for ${order.customerName}`);
+      
+      // Trigger notification for quotation/invoice generation
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: order.email,
+          subject: `Quotation/Invoice Generated: #${order.id.slice(0, 8)}`,
+          message: `Your quotation/invoice for order #${order.id.slice(0, 8)} has been generated.`,
+          items: order.items
+        })
+      });
     } catch (error) {
       console.error("Error generating invoice:", error);
     }
@@ -181,6 +193,20 @@ export const OrderDashboard = () => {
         updatedAt: new Date()
       });
       await logAction('update_order_status', `Updated order ${id} status to ${newStatus}`);
+      
+      // Trigger notification if status is shipped
+      if (newStatus === 'shipped' && order) {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: order.email,
+            subject: `Order Shipped: #${id.slice(0, 8)}`,
+            message: `Your order #${id.slice(0, 8)} has been shipped!`,
+            items: order.items
+          })
+        });
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `orders/${id}`);
     }
@@ -533,7 +559,8 @@ export const OrderDashboard = () => {
       </div>
 
       <div className="bg-[#0f172a] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-        <div className="overflow-x-auto">
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm text-white/80">
             <thead className="bg-white/5 text-[10px] uppercase text-white/40 tracking-widest font-bold">
               <tr>
@@ -639,6 +666,59 @@ export const OrderDashboard = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card Layout */}
+        <div className="md:hidden divide-y divide-white/5">
+          {filteredOrders.length === 0 ? (
+            <div className="px-6 py-20 text-center text-white/20">No orders found matching your criteria.</div>
+          ) : (
+            filteredOrders.map(order => (
+              <div key={order.id} className={`p-4 space-y-3 ${selectedOrders.has(order.id) ? 'bg-brand-orange/5' : ''}`}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedOrders.has(order.id)}
+                      onChange={() => toggleOrderSelection(order.id)}
+                      className="rounded border-white/10 bg-white/5 text-brand-orange focus:ring-brand-orange"
+                    />
+                    <span className="font-mono text-xs text-brand-orange font-bold">#{order.id.slice(0, 8).toUpperCase()}</span>
+                  </div>
+                  <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                    order.status === 'pending' ? 'bg-amber-500/20 text-amber-500' :
+                    order.status === 'shipped' ? 'bg-blue-500/20 text-blue-500' :
+                    order.status === 'delivered' ? 'bg-emerald-500/20 text-emerald-500' :
+                    'bg-red-500/20 text-red-500'
+                  }`}>
+                    {order.status}
+                  </span>
+                </div>
+                <div className="text-sm font-bold text-white">{order.customerName}</div>
+                <div className="text-xs text-white/40">{order.email}</div>
+                <div className="flex justify-between items-center pt-2">
+                  <div className="font-bold text-white">₹{order.total?.toLocaleString()}</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelectedOrder(order)} className="p-2 hover:bg-white/5 rounded-lg text-white/20 hover:text-brand-orange transition-colors">
+                      <Eye size={16} />
+                    </button>
+                    <select 
+                      value={order.status}
+                      onChange={(e) => updateStatus(order.id, e.target.value)}
+                      className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white focus:outline-none focus:border-brand-orange"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="shipped">Shipped</option>
+                      <option value="delivered">Delivered</option>
+                      <option value="return_requested">Return Req</option>
+                      <option value="refunded">Refunded</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Component } from 'react';
 import Markdown from 'react-markdown';
 import { LoginPage } from './components/LoginPage';
-import { Download, Search, ShoppingCart, Moon, ShieldCheck, ChevronDown, ArrowRight, MessageCircle, AlertTriangle, Bot, Menu, X, LogOut, User as UserIcon, CheckCircle2, Loader2, Star, Send, Trash2, RefreshCw, Sparkles, Truck, Clock, PhoneCall, MapPin, Shield, Award, Headphones, ArrowLeft, Mail, Phone, Instagram, Facebook, Twitter, Cpu, Zap, BarChart3, Eye, Settings, Users, Pipette, Droplets, Waves, Bath, LayoutDashboard, MessageSquare, Package, Wand2, Plus, FileText, ListTree, Boxes, Layout, PenTool, Image as ImageIcon, Tag, Webhook, Activity, List, Store, Check, Upload, Link as LinkIcon } from 'lucide-react';
+import { Download, Search, ShoppingCart, Moon, ShieldCheck, ChevronDown, ArrowRight, MessageCircle, AlertTriangle, Bot, Menu, X, LogOut, User as UserIcon, CheckCircle2, Loader2, Star, Send, Trash2, RefreshCw, Sparkles, Truck, Clock, PhoneCall, MapPin, Shield, Award, Headphones, ArrowLeft, Mail, Phone, Instagram, Facebook, Twitter, Cpu, Zap, BarChart3, Eye, Settings, Users, Pipette, Droplets, Waves, Bath, LayoutDashboard, MessageSquare, Package, Wand2, Plus, FileText, ListTree, Boxes, Layout, PenTool, Image as ImageIcon, Tag, Webhook, Activity, List, Store, Check, Upload, Link as LinkIcon, Bell, Database } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { motion, AnimatePresence } from 'motion/react';
@@ -53,6 +53,73 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [generatingInsight, setGeneratingInsight] = useState(false);
 
+  // Notifications State
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    // Listen for new quotes to trigger notifications
+    const q = query(collection(db, 'quotes'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const data = change.doc.data();
+          // Only notify for new quotes (not initial load)
+          const now = new Date().getTime();
+          const createdAt = data.createdAt?.toDate().getTime();
+          if (createdAt && (now - createdAt) < 10000) { // If created in last 10 seconds
+            const newNotif = {
+              id: Math.random().toString(36).substr(2, 9),
+              title: 'New Quote Request',
+              message: `New request from ${data.name}`,
+              time: new Date(),
+              type: 'quote',
+              read: false
+            };
+            setNotifications(prev => [newNotif, ...prev]);
+          }
+        }
+      });
+    });
+
+    // Listen for low stock (mocking logic for now based on products)
+    const pQ = query(collection(db, 'products'));
+    const unsubscribeProducts = onSnapshot(pQ, (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        const product = doc.data();
+        if (product.stock !== undefined && product.stock < 10) {
+          const newNotif = {
+            id: `stock-${doc.id}`,
+            title: 'Low Stock Alert',
+            message: `${product.name} is low on stock (${product.stock} left)`,
+            time: new Date(),
+            type: 'stock',
+            read: false
+          };
+          setNotifications(prev => {
+            if (prev.find(n => n.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+        }
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeProducts();
+    };
+  }, []);
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   // AI Reply State
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [aiReply, setAiReply] = useState<string>('');
@@ -60,6 +127,36 @@ const AdminDashboard = ({ onClose }: { onClose: () => void }) => {
   const [generatingQuoteFor, setGeneratingQuoteFor] = useState<string | null>(null);
   const [quoteItems, setQuoteItems] = useState<any[]>([{ product: '', size: '', qty: 1, rate: 0 }]);
   const [sendingQuote, setSendingQuote] = useState(false);
+
+  // Bulk Actions State
+  const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+
+  // Advanced Filtering State
+  const [quoteFilter, setQuoteFilter] = useState({
+    status: 'all',
+    dateRange: 'all',
+    searchTerm: ''
+  });
+  const [productFilter, setProductFilter] = useState({
+    category: 'all',
+    searchTerm: ''
+  });
+
+  const handleBulkDeleteProducts = async () => {
+    if (selectedProducts.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedProducts.size} products?`)) return;
+    
+    try {
+      const promises = Array.from(selectedProducts).map(id => deleteDoc(doc(db, 'products', id)));
+      await Promise.all(promises);
+      setSelectedProducts(new Set());
+      alert('Products deleted successfully.');
+    } catch (error) {
+      console.error("Error deleting products:", error);
+      alert('Failed to delete products.');
+    }
+  };
 
   useEffect(() => {
     const qQuotes = query(collection(db, 'quotes'), orderBy('createdAt', 'desc'));
@@ -589,10 +686,114 @@ Thank you for your business!
       {/* Main Content */}
       <div className="flex-grow overflow-auto bg-[#020617] p-6 md:p-8">
         <div className="max-w-6xl mx-auto">
-          
+          {/* Header with Notifications */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-orange/10 flex items-center justify-center text-brand-orange">
+                <LayoutDashboard size={24} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">Admin Dashboard</h2>
+                <p className="text-white/40 text-xs">Welcome back, Super Admin</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2.5 bg-[#0f172a] border border-white/5 rounded-xl text-white/60 hover:text-brand-orange transition-all relative group"
+                >
+                  <Bell size={20} className="group-hover:scale-110 transition-transform" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-orange text-brand-dark text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-[#020617] animate-pulse">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-3 w-80 bg-[#0f172a] rounded-2xl shadow-2xl border border-white/10 z-[120] overflow-hidden"
+                    >
+                      <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/5">
+                        <h3 className="font-bold text-white text-sm">Notifications</h3>
+                        <div className="flex gap-3">
+                          <button onClick={markAllAsRead} className="text-[10px] font-bold text-brand-orange hover:underline uppercase tracking-wider">Mark all read</button>
+                          <button onClick={clearNotifications} className="text-[10px] font-bold text-white/40 hover:text-white uppercase tracking-wider">Clear</button>
+                        </div>
+                      </div>
+                      <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+                        {notifications.length === 0 ? (
+                          <div className="p-10 text-center text-white/20">
+                            <Bell size={40} className="mx-auto mb-3 opacity-10" />
+                            <p className="text-sm">No new notifications</p>
+                          </div>
+                        ) : (
+                          notifications.map(notif => (
+                            <div 
+                              key={notif.id} 
+                              className={`p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer relative group ${!notif.read ? 'bg-brand-orange/[0.03]' : ''}`}
+                            >
+                              {!notif.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-orange"></div>}
+                              <div className="flex gap-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'quote' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>
+                                  {notif.type === 'quote' ? <MessageSquare size={18} /> : <AlertTriangle size={18} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-white truncate">{notif.title}</p>
+                                  <p className="text-xs text-white/60 mt-0.5 line-clamp-2">{notif.message}</p>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <Clock size={10} className="text-white/30" />
+                                    <p className="text-[10px] text-white/30">{notif.time.toLocaleTimeString()}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-bold text-white">Ansh Singhal</p>
+                  <p className="text-[10px] font-bold text-brand-orange uppercase tracking-widest">Super Admin</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-brand-orange text-brand-dark font-bold flex items-center justify-center shadow-lg shadow-brand-orange/20">
+                  AS
+                </div>
+              </div>
+            </div>
+          </div>
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-white mb-6">Overview</h3>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-white">Overview</h3>
+                <button 
+                  onClick={() => {
+                    const csvContent = "data:text/csv;charset=utf-8," 
+                      + "ID,Name,Email,Status,Date\n"
+                      + quotes.map(q => `${q.id},${q.name},${q.email},${q.status},${q.createdAt?.toDate().toLocaleDateString()}`).join("\n");
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "business_report.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                  }}
+                  className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl text-sm font-bold border border-white/10 transition-all"
+                >
+                  <Download size={16} /> Export Report
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-[#0f172a] p-6 rounded-2xl border border-white/5">
                   <div className="text-white/60 text-sm font-medium mb-2">Total Requests</div>
@@ -719,9 +920,90 @@ Thank you for your business!
 
           {activeTab === 'quotes' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <h3 className="text-2xl font-bold text-white">Quote Requests</h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={16} />
+                    <input 
+                      type="text"
+                      placeholder="Search quotes..."
+                      value={quoteFilter.searchTerm}
+                      onChange={(e) => setQuoteFilter({...quoteFilter, searchTerm: e.target.value})}
+                      className="bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange w-64"
+                    />
+                  </div>
+                  <select 
+                    value={quoteFilter.status}
+                    onChange={(e) => setQuoteFilter({...quoteFilter, status: e.target.value})}
+                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                  <select 
+                    value={quoteFilter.dateRange}
+                    onChange={(e) => setQuoteFilter({...quoteFilter, dateRange: e.target.value})}
+                    className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                  </select>
+                </div>
               </div>
+
+              {selectedQuotes.size > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-brand-orange/10 border border-brand-orange/30 p-4 rounded-2xl flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-brand-orange">{selectedQuotes.size} items selected</span>
+                    <button 
+                      onClick={() => setSelectedQuotes(new Set())}
+                      className="text-xs text-white/40 hover:text-white underline"
+                    >
+                      Deselect all
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <select 
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        if (!newStatus) return;
+                        const promises = Array.from(selectedQuotes).map(id => 
+                          updateDoc(doc(db, 'quotes', id), { status: newStatus })
+                        );
+                        await Promise.all(promises);
+                        setSelectedQuotes(new Set());
+                        alert(`Updated ${selectedQuotes.size} quotes to ${newStatus}`);
+                      }}
+                      className="bg-brand-orange text-brand-dark text-xs font-bold px-3 py-1.5 rounded-lg focus:outline-none"
+                    >
+                      <option value="">Bulk Status Update</option>
+                      <option value="contacted">Mark Contacted</option>
+                      <option value="completed">Mark Completed</option>
+                    </select>
+                    <button 
+                      onClick={async () => {
+                        if (confirm(`Are you sure you want to delete ${selectedQuotes.size} quotes?`)) {
+                          const promises = Array.from(selectedQuotes).map(id => deleteDoc(doc(db, 'quotes', id)));
+                          await Promise.all(promises);
+                          setSelectedQuotes(new Set());
+                        }
+                      }}
+                      className="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                    >
+                      Delete Selected
+                    </button>
+                  </div>
+                </motion.div>
+              )}
               
               {loading ? (
                 <div className="flex items-center justify-center py-20">
@@ -735,19 +1017,53 @@ Thank you for your business!
               ) : (
                 <div className="grid gap-4">
                   {quotes
+                    .filter(q => {
+                      const matchesSearch = q.name.toLowerCase().includes(quoteFilter.searchTerm.toLowerCase()) || 
+                                          q.email.toLowerCase().includes(quoteFilter.searchTerm.toLowerCase());
+                      const matchesStatus = quoteFilter.status === 'all' || q.status === quoteFilter.status;
+                      
+                      let matchesDate = true;
+                      if (quoteFilter.dateRange !== 'all') {
+                        const now = new Date();
+                        const qDate = q.createdAt?.toDate();
+                        if (!qDate) matchesDate = false;
+                        else {
+                          if (quoteFilter.dateRange === 'today') {
+                            matchesDate = qDate.toDateString() === now.toDateString();
+                          } else if (quoteFilter.dateRange === 'week') {
+                            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            matchesDate = qDate >= weekAgo;
+                          } else if (quoteFilter.dateRange === 'month') {
+                            matchesDate = qDate.getMonth() === now.getMonth() && qDate.getFullYear() === now.getFullYear();
+                          }
+                        }
+                      }
+                      
+                      return matchesSearch && matchesStatus && matchesDate;
+                    })
                     .sort((a, b) => {
                       if (a.status === 'pending' && b.status !== 'pending') return -1;
                       if (a.status !== 'pending' && b.status === 'pending') return 1;
-                      if (a.status === 'completed' && b.status !== 'completed') return 1;
-                      if (a.status !== 'completed' && b.status === 'completed') return -1;
                       return 0;
                     })
                     .map((quote) => (
-                    <div key={quote.id} className="bg-[#0f172a] rounded-2xl p-6 border border-white/5 shadow-xl">
+                    <div key={quote.id} className={`bg-[#0f172a] rounded-2xl p-6 border transition-all ${selectedQuotes.has(quote.id) ? 'border-brand-orange shadow-lg shadow-brand-orange/10' : 'border-white/5 shadow-xl'}`}>
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-bold text-white">{quote.name}</h3>
+                        <div className="flex items-center gap-4">
+                          <input 
+                            type="checkbox"
+                            checked={selectedQuotes.has(quote.id)}
+                            onChange={(e) => {
+                              const newSet = new Set(selectedQuotes);
+                              if (e.target.checked) newSet.add(quote.id);
+                              else newSet.delete(quote.id);
+                              setSelectedQuotes(newSet);
+                            }}
+                            className="w-5 h-5 rounded border-white/10 bg-white/5 text-brand-orange focus:ring-brand-orange"
+                          />
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-3">
+                              <h3 className="text-lg font-bold text-white">{quote.name}</h3>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                               quote.status === 'pending' ? 'bg-amber-500/20 text-amber-500' :
                               quote.status === 'contacted' ? 'bg-blue-500/20 text-blue-500' :
@@ -760,7 +1076,8 @@ Thank you for your business!
                           </div>
                           <p className="text-white/60 text-sm">{quote.email} • {quote.phone || 'No Phone'}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                      </div>
+                      <div className="flex items-center gap-2">
                           <button onClick={() => {
                             setGeneratingQuoteFor(quote.id);
                             if (quote.formalQuote) {
@@ -1056,7 +1373,7 @@ Thank you for your business!
                                 disabled={sendingQuote}
                                 className="bg-brand-orange text-brand-dark px-8 py-2 rounded-xl text-sm font-bold hover:bg-orange-400 transition-all shadow-lg shadow-brand-orange/20 flex items-center gap-2 disabled:opacity-50"
                               >
-                                {sendingQuote ? <Loader2 className="animate-spin" size={16} /> : (quote.formalQuote ? 'Update' : 'Generate')} & Send
+                                {sendingQuote ? <Loader2 className="animate-spin" size={16} /> : (quote.formalQuote ? 'Update' : 'Generate')} {' & '} Send
                               </button>
                             </div>
                           </div>
@@ -1128,13 +1445,15 @@ Thank you for your business!
             <div className="space-y-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold text-white">Products Management</h3>
-                <button 
-                  onClick={() => setIsAddingProduct(!isAddingProduct)}
-                  className="bg-brand-orange text-brand-dark px-4 py-2 rounded-lg font-bold text-sm hover:bg-orange-400 transition-colors flex items-center gap-2"
-                >
-                  {isAddingProduct ? <X size={16} /> : <Plus size={16} />}
-                  {isAddingProduct ? 'Cancel' : 'Add Product'}
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsAddingProduct(!isAddingProduct)}
+                    className="bg-brand-orange text-brand-dark px-4 py-2 rounded-lg font-bold text-sm hover:bg-orange-400 transition-colors flex items-center gap-2"
+                  >
+                    {isAddingProduct ? <X size={16} /> : <Plus size={16} />}
+                    {isAddingProduct ? 'Cancel' : 'Add Product'}
+                  </button>
+                </div>
               </div>
 
               {isAddingProduct && (
@@ -1239,22 +1558,74 @@ Thank you for your business!
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="animate-spin text-brand-orange" size={48} />
                 </div>
-              ) : products.length === 0 ? (
-                <div className="text-center py-20 text-white/40 bg-[#0f172a] rounded-2xl border border-white/5">
-                  <Package size={64} className="mx-auto mb-4 opacity-20" />
-                  <p className="text-xl">No products found.</p>
-                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {products.map(product => (
-                    <div key={product.id} className="bg-[#0f172a] p-4 rounded-xl border border-white/5 flex items-start gap-4">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="w-20 h-20 object-cover rounded-lg bg-white/5" />
-                      ) : (
-                        <div className="w-20 h-20 bg-white/5 rounded-lg flex items-center justify-center shrink-0">
-                          <Package className="text-white/20" size={24} />
-                        </div>
-                      )}
+                <>
+                  <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="flex-grow flex items-center gap-4 bg-[#0f172a] p-2 rounded-xl border border-white/5">
+                      <Search className="text-white/40 ml-2" size={20} />
+                      <input 
+                        type="text" 
+                        placeholder="Search products..." 
+                        value={productFilter.searchTerm}
+                        onChange={(e) => setProductFilter({...productFilter, searchTerm: e.target.value})}
+                        className="bg-transparent border-none text-white focus:outline-none w-full"
+                      />
+                    </div>
+                    <select 
+                      value={productFilter.category}
+                      onChange={(e) => setProductFilter({...productFilter, category: e.target.value})}
+                      className="bg-[#0f172a] border border-white/5 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-brand-orange"
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="CPVC FITTING">CPVC FITTING</option>
+                      <option value="VALVE">VALVE</option>
+                      <option value="BRASS FITTING">BRASS FITTING</option>
+                      <option value="FLANGE">FLANGE</option>
+                      <option value="ACCESSORY">ACCESSORY</option>
+                    </select>
+                    {selectedProducts.size > 0 && (
+                      <button 
+                        onClick={handleBulkDeleteProducts}
+                        className="bg-red-500/10 text-red-500 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-red-500 hover:text-white transition-colors"
+                      >
+                        <Trash2 size={18} /> Delete Selected ({selectedProducts.size})
+                      </button>
+                    )}
+                  </div>
+
+                  {products.length === 0 ? (
+                    <div className="text-center py-20 text-white/40 bg-[#0f172a] rounded-2xl border border-white/5">
+                      <Package size={64} className="mx-auto mb-4 opacity-20" />
+                      <p className="text-xl">No products found.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {products
+                        .filter(p => 
+                          (productFilter.category === 'all' || p.category === productFilter.category) &&
+                          (p.name.toLowerCase().includes(productFilter.searchTerm.toLowerCase()) || 
+                           p.description?.toLowerCase().includes(productFilter.searchTerm.toLowerCase()))
+                        )
+                        .map(product => (
+                        <div key={product.id} className={`bg-[#0f172a] p-4 rounded-xl border flex items-start gap-4 transition-all ${selectedProducts.has(product.id) ? 'border-brand-orange shadow-lg shadow-brand-orange/10' : 'border-white/5'}`}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedProducts.has(product.id)}
+                            onChange={(e) => {
+                              const newSet = new Set(selectedProducts);
+                              if (e.target.checked) newSet.add(product.id);
+                              else newSet.delete(product.id);
+                              setSelectedProducts(newSet);
+                            }}
+                            className="mt-2 w-5 h-5 rounded border-white/10 bg-white/5 text-brand-orange focus:ring-brand-orange"
+                          />
+                          {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="w-20 h-20 object-cover rounded-lg bg-white/5" />
+                          ) : (
+                            <div className="w-20 h-20 bg-white/5 rounded-lg flex items-center justify-center shrink-0">
+                              <Package className="text-white/20" size={24} />
+                            </div>
+                          )}
                       <div className="flex-grow">
                         <div className="flex items-start justify-between">
                           <div>
@@ -1271,11 +1642,13 @@ Thank you for your business!
                           </button>
                         </div>
                         <div className="text-white/60 text-xs mt-2 line-clamp-2">{product.description}</div>
-                        <div className="text-white font-bold mt-2">${product.price}</div>
+                        <div className="text-white font-bold mt-2">{product.price > 0 ? `₹${product.price}` : 'Price on Request'}</div>
                       </div>
                     </div>
                   ))}
                 </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1307,7 +1680,6 @@ Thank you for your business!
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {console.log("Users:", users)}
                       {users.map(user => {
                         console.log("User:", user);
                         const userOrders = orders.filter(o => o.userId === user.id);
@@ -2483,7 +2855,7 @@ const ProductRange = ({ onViewChange }: { onViewChange: (view: any, collection?:
   const products = [
     {
       title: "CPVC Pipes & Fittings",
-      description: "Hot & cold water systems — Astral, Birla NU, Finolex & Supreme. Complete range with pricing.",
+      description: "Hot & cold water systems — Astral, Birla NU, Finolex & Supreme. Complete range.",
       // Replace this URL with the path to your uploaded image (e.g., "/cpvc-showroom.jpg" if placed in the public folder)
       image: "https://images.unsplash.com/photo-1620626011761-996317b8d101?q=80&w=2069&auto=format&fit=crop", 
       bgColor: "bg-[#0056b3]",
@@ -3123,6 +3495,8 @@ interface CPVCProduct {
   features?: string[];
   specifications?: { label: string; value: string }[];
   tableData?: ProductTableRow[];
+  size?: string;
+  pressureRating?: string;
 }
 
 const ProductDetailPage = ({ product, onBack, onOpenSizeSelection }: { product: CPVCProduct | null; onBack: () => void; onOpenSizeSelection: (product: CPVCProduct) => void }) => {
@@ -3252,6 +3626,8 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
   const [selectedBrand, setSelectedBrand] = useState('Astral');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSize, setSelectedSize] = useState('All');
+  const [selectedPressure, setSelectedPressure] = useState('All');
   const [dbProducts, setDbProducts] = useState<CPVCProduct[]>([]);
 
   const categories = ['All', 'CPVC PIPE', 'CPVC FITTING', 'VALVE', 'BRASS FITTING', 'FLANGE', 'ACCESSORY'];
@@ -3269,13 +3645,22 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedProducts = snapshot.docs.map(doc => {
         const data = doc.data();
+        
+        let productBrand = "Astral";
+        const nameLower = (data.name || "").toLowerCase();
+        if (nameLower.includes("supreme")) productBrand = "Supreme";
+        else if (nameLower.includes("birla")) productBrand = "Birla";
+        else if (nameLower.includes("finolex")) productBrand = "Finolex";
+        else if (nameLower.includes("tirupati")) productBrand = "Tirupati";
+
         return {
-          title: data.name,
-          description: data.description,
+          title: data.name || "Unknown Product",
+          description: data.description || "",
           image: data.imageUrl || "https://images.unsplash.com/photo-1581094288338-2314dddb7bc3?q=80&w=2070&auto=format&fit=crop",
           bgColor: "bg-blue-50",
-          brand: "Astral", // Defaulting to Astral for CPVC products added via admin
-          category: data.category,
+          brand: productBrand,
+          category: data.category || "",
+          price: data.price
         } as CPVCProduct;
       });
       // Filter out products that belong to Anjul Sanitaryware
@@ -3297,6 +3682,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       brand: "Astral",
       category: "CPVC PIPE",
       hsn: "39172390",
+      pressureRating: "SDR 11",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "High Pressure Bearing Capacity"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M511110301", pkg: "100", price: "312.00" },
@@ -3315,6 +3701,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       brand: "Astral",
       category: "CPVC PIPE",
       hsn: "39172390",
+      pressureRating: "SDR 11",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "High Pressure Bearing Capacity"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M511110501", pkg: "60", price: "520.00" },
@@ -3333,6 +3720,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       brand: "Astral",
       category: "CPVC PIPE",
       hsn: "39172390",
+      pressureRating: "SCH 80",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "High Pressure Bearing Capacity"],
       tableData: [
         { sizeCm: "6.5", sizeInch: "2 1/2\"", code: "M511800307", pkg: "05", price: "6,171.00" },
@@ -3350,6 +3738,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       brand: "Astral",
       category: "CPVC PIPE",
       hsn: "39172390",
+      pressureRating: "SDR 13.5",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "High Pressure Bearing Capacity"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M511130301", pkg: "100", price: "273.00" },
@@ -3697,7 +4086,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "BRASS FITTING",
       hsn: "39174000",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Brass Threaded"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "2.0 x 1.5", sizeInch: "3/4\" x 1/2\"", code: "M512111214", pkg: "50 200" },
         { sizeCm: "2.5 x 1.5", sizeInch: "1\" x 1/2\"", code: "M512111215", pkg: "25 100" },
@@ -3713,7 +4101,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "BRASS FITTING",
       hsn: "39174000",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Brass Threaded"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512119801", pkg: "25 200" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512119802", pkg: "10 100" },
@@ -3732,7 +4119,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "BRASS FITTING",
       hsn: "39174000",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Brass Threaded"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512119901", pkg: "25 200" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512119902", pkg: "10 110" },
@@ -3751,7 +4137,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "VALVE",
       hsn: "84818090",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Chrome Plated"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512118501", pkg: "01 20" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512118502", pkg: "02 16" },
@@ -3767,7 +4152,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "VALVE",
       hsn: "84818090",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "CTS Socket"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512112701N", pkg: "- 80" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512112702N", pkg: "- 100" },
@@ -3786,7 +4170,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "ACCESSORY",
       hsn: "74122019",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Chrome Plated"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "2.5", sizeInch: "1\"", code: "T143-010M", pkg: "- 96" },
         { sizeCm: "4.0", sizeInch: "1 1/2\"", code: "T143-015M", pkg: "- 64" },
@@ -3807,7 +4190,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "BRASS FITTING",
       hsn: "39174000",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Brass Threaded"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512111401", pkg: "50 200" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512111402", pkg: "25 100" },
@@ -3826,7 +4208,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "BRASS FITTING",
       hsn: "39174000",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Brass Threaded"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512111701", pkg: "50 200" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512111702", pkg: "25 100" },
@@ -3845,7 +4226,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "VALVE",
       hsn: "84818090",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Wheel Type"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512118601", pkg: "01 20" },
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512118602", pkg: "02 16" },
@@ -3861,7 +4241,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       category: "FLANGE",
       hsn: "84818090",
       features: ["Advanced Hot & Cold Water System", "NSF Certified", "Lead-Free & Non-Toxic", "Stainless Steel"],
-      priceRange: "Price on Request",
       tableData: [
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "RM04159004", pkg: "- 01" },
       ]
@@ -3873,7 +4252,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-blue-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["High Pressure Resistance", "Smooth Internal Surface", "Lead-Free Material"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512110101", pkg: "100" },
@@ -3888,7 +4266,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50", 
       brand: "Astral", 
       category: "ACCESSORY", 
-      priceRange: "Price on Request",
       features: ["3-in-1 Functionality", "Precision Threading", "Leak-Proof Design"],
       tableData: [
         { sizeCm: "2.0", sizeInch: "3/4\"", code: "M512118701", pkg: "20" }
@@ -3901,7 +4278,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-blue-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["Dual Socket Design", "Corrosion Resistant", "Easy Installation"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512110201", pkg: "100" },
@@ -3915,7 +4291,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["Space Saving", "Durable CPVC", "High Flow Rate"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512110301", pkg: "50" },
@@ -3929,7 +4304,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-blue-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["Secure Threading", "Chemical Resistant", "Long Life"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512110401", pkg: "200" },
@@ -3943,7 +4317,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-blue-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["Threaded x Socket", "Heavy Duty", "UV Stabilized"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "M512110501", pkg: "50" },
@@ -3957,7 +4330,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-blue-50", 
       brand: "Astral", 
       category: "CPVC FITTING", 
-      priceRange: "Price on Request",
       features: ["Inline Filtration", "Easy to Clean", "Robust Mesh"],
       tableData: [
         { sizeCm: "2.5", sizeInch: "1\"", code: "M512110601", pkg: "10" }
@@ -3970,7 +4342,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50", 
       brand: "Astral", 
       category: "ACCESSORY", 
-      priceRange: "Price on Request",
       features: ["Clean Cuts", "Ratchet Mechanism", "Ergonomic Grip"],
       tableData: [
         { sizeCm: "Up to 5.0", sizeInch: "Up to 2\"", code: "M512110701", pkg: "1" }
@@ -3983,7 +4354,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["High Durability", "Leak-Proof", "Corrosion Resistant"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000036", pkg: "-" },
@@ -4001,7 +4371,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Smooth Flow", "Robust Construction", "Easy Installation"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000994", pkg: "-" },
@@ -4019,7 +4388,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Strong Branching", "Leak-Proof", "High Pressure Rating"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000042", pkg: "-" },
@@ -4037,7 +4405,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Secure Joint", "Durable Material", "Chemical Resistant"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000048", pkg: "-" },
@@ -4055,7 +4422,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Efficient Reduction", "Smooth Transition", "Robust Design"],
       tableData: [
         { sizeCm: "2.0x1.5", sizeInch: "3/4\"x1/2\"", code: "96000324", pkg: "-" },
@@ -4073,7 +4439,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Versatile Branching", "Strong Construction", "Leak-Proof"],
       tableData: [
         { sizeCm: "2.0x2.0x1.5", sizeInch: "3/4\"x3/4\"x1/2\"", code: "96000329", pkg: "-" },
@@ -4100,7 +4465,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Precision Fit", "Durable PVC", "Easy Installation"],
       tableData: [
         { sizeCm: "2.0x1.5", sizeInch: "3/4\"x1/2\"", code: "96000390", pkg: "-" },
@@ -4127,7 +4491,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Four-Way Branching", "Robust Design", "High Quality"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96001012", pkg: "-" },
@@ -4142,7 +4505,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Secure Seal", "Durable", "Easy to Fit"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000054", pkg: "-" },
@@ -4160,7 +4522,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Easy Maintenance", "Leak-Proof Joint", "Robust Construction"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96001075", pkg: "-" },
@@ -4178,7 +4539,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Female Threaded", "Secure Connection", "Corrosion Resistant"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000482", pkg: "-" },
@@ -4197,7 +4557,6 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC FITTING",
-      priceRange: "Price on Request",
       features: ["Male Threaded", "Secure Connection", "Durable Material"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000481", pkg: "-" },
@@ -4217,7 +4576,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-orange-50",
       brand: "Birla",
       category: "CPVC PIPE",
-      priceRange: "Price on Request",
+      pressureRating: "SDR 11",
       features: ["SDR 11 Standard", "Hot & Cold Water", "High Pressure Resistance"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000001", pkg: "-" },
@@ -4235,7 +4594,7 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
       bgColor: "bg-slate-50",
       brand: "Birla",
       category: "CPVC PIPE",
-      priceRange: "Price on Request",
+      pressureRating: "SDR 13.5",
       features: ["SDR 13.5 Standard", "Smooth Internal Surface", "Lead-Free"],
       tableData: [
         { sizeCm: "1.5", sizeInch: "1/2\"", code: "96000011", pkg: "-" },
@@ -4245,20 +4604,495 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
         { sizeCm: "4.0", sizeInch: "1 1/2\"", code: "96000015", pkg: "-" },
         { sizeCm: "5.0", sizeInch: "2\"", code: "96000016", pkg: "-" }
       ]
+    },
+    {
+      title: "Birla Reducing Bush",
+      description: "Birla CPVC Reducing Bush for connecting pipes of different diameters.",
+      image: "https://picsum.photos/seed/birla-bush/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["High Quality CPVC", "Leak-Proof Joint", "Corrosion Resistant"],
+      tableData: [
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000066", pkg: "50/500" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96000068", pkg: "50/400" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96000067", pkg: "50/400" },
+        { sizeCm: "32x15", sizeInch: "1 1/4\"x1/2\"", code: "96000071", pkg: "40/200" },
+        { sizeCm: "32x20", sizeInch: "1 1/4\"x3/4\"", code: "96000070", pkg: "40/200" },
+        { sizeCm: "32x25", sizeInch: "1 1/4\"x1\"", code: "96000069", pkg: "40/200" },
+        { sizeCm: "40x15", sizeInch: "1 1/2\"x1/2\"", code: "96000073", pkg: "10/80" },
+        { sizeCm: "40x20", sizeInch: "1 1/2\"x3/4\"", code: "96000075", pkg: "10/80" },
+        { sizeCm: "40x25", sizeInch: "1 1/2\"x1\"", code: "96000074", pkg: "10/80" },
+        { sizeCm: "40x32", sizeInch: "1 1/2\"x1 1/4\"", code: "96000072", pkg: "10/80" },
+        { sizeCm: "50x15", sizeInch: "2\"x1/2\"", code: "96000079", pkg: "10/50" },
+        { sizeCm: "50x20", sizeInch: "2\"x3/4\"", code: "96000080", pkg: "10/50" },
+        { sizeCm: "50x25", sizeInch: "2\"x1\"", code: "96000077", pkg: "10/50" },
+        { sizeCm: "50x32", sizeInch: "2\"x1 1/4\"", code: "96000078", pkg: "10/50" },
+        { sizeCm: "50x40", sizeInch: "2\"x1 1/2\"", code: "96000076", pkg: "10/50" }
+      ]
+    },
+    {
+      title: "Birla Transition Bush",
+      description: "Birla CPVC Transition Bush for transitioning between different pipe materials or sizes.",
+      image: "https://picsum.photos/seed/birla-trans/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Smooth Transition", "Durable Construction", "Easy Installation"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000479", pkg: "75/600" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000480", pkg: "50/300" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000489", pkg: "30/210" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000490", pkg: "10/120" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96000491", pkg: "10/80" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96000492", pkg: "10/50" }
+      ]
+    },
+    {
+      title: "Birla Tank Nipple",
+      description: "Birla CPVC Tank Nipple for secure connections to water tanks.",
+      image: "https://picsum.photos/seed/birla-tank/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Leak-Proof Seal", "Heavy Duty", "UV Resistant"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000097", pkg: "25/200" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000098", pkg: "20/160" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000099", pkg: "10/100" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000100", pkg: "6/60" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96000234", pkg: "5/70" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96000235", pkg: "4/32" }
+      ]
+    },
+    {
+      title: "Birla NRV (Non-Return Valve)",
+      description: "Birla CPVC Non-Return Valve to prevent backflow in plumbing systems.",
+      image: "https://picsum.photos/seed/birla-nrv/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Backflow Prevention", "Smooth Operation", "Durable Valve"],
+      tableData: [
+        { sizeCm: "20", sizeInch: "3/4\"", code: "98000550", pkg: "5/35" },
+        { sizeCm: "25", sizeInch: "1\"", code: "98000551", pkg: "2/20" }
+      ]
+    },
+    {
+      title: "Birla Brass Elbow",
+      description: "Birla CPVC Brass Elbow for strong and reliable 90-degree turns with brass threading.",
+      image: "https://picsum.photos/seed/birla-brass-elbow/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Premium Brass Threading", "High Strength", "Leak-Proof"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000095", pkg: "15/150" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000334", pkg: "25/125" },
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000094", pkg: "25/125" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000333", pkg: "20/80" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96000096", pkg: "15/75" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96001097", pkg: "25/125" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000332", pkg: "5/80" },
+        { sizeCm: "32x15", sizeInch: "1 1/4\"x1/2\"", code: "96001109", pkg: "15/75" },
+        { sizeCm: "32x20", sizeInch: "1 1/4\"x3/4\"", code: "96001110", pkg: "15/75" }
+      ]
+    },
+    {
+      title: "Birla Ball Valve (Two Piece)",
+      description: "Birla CPVC Two Piece Ball Valve for reliable flow control.",
+      image: "https://picsum.photos/seed/birla-ball-valve/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Quarter Turn Operation", "Smooth Handle", "Full Flow"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "98001267", pkg: "-" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "98001268", pkg: "75" },
+        { sizeCm: "25", sizeInch: "1\"", code: "98001269", pkg: "12" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "98001270", pkg: "1/25" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "98001271", pkg: "1/16" },
+        { sizeCm: "50", sizeInch: "2\"", code: "98001272", pkg: "1/72" }
+      ]
+    },
+    {
+      title: "Birla Tank Nipple (SOC)",
+      description: "Birla CPVC Tank Nipple with Socket connection.",
+      image: "https://picsum.photos/seed/birla-tank-soc/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Socket Connection", "Secure Tank Fit", "High Durability"],
+      tableData: [
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000517", pkg: "20/160" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000518", pkg: "10/100" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96001103", pkg: "6/60" }
+      ]
+    },
+    {
+      title: "Birla End Plug",
+      description: "Birla CPVC End Plug for sealing pipe ends.",
+      image: "https://picsum.photos/seed/birla-end-plug/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Tight Seal", "Easy to Install", "Corrosion Proof"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96001388", pkg: "25/300" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96001389", pkg: "25/200" }
+      ]
+    },
+    {
+      title: "Birla Step Over Bend",
+      description: "Birla CPVC Step Over Bend for crossing over other pipes.",
+      image: "https://picsum.photos/seed/birla-stepover/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Compact Design", "Smooth Flow", "Strong Build"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000197", pkg: "15/120" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000114", pkg: "10/70" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000115", pkg: "5/35" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96001127", pkg: "5/30" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96001128", pkg: "2/20" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96001129", pkg: "2/10" }
+      ]
+    },
+    {
+      title: "Birla Brass Tee",
+      description: "Birla CPVC Brass Tee for three-way connections with brass threading.",
+      image: "https://picsum.photos/seed/birla-brass-tee/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Brass Threaded Branch", "High Pressure Rating", "Leak-Proof"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000086", pkg: "10/150" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000330", pkg: "20/120" },
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000088", pkg: "15/75" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96000087", pkg: "10/60" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96000331", pkg: "15/75" },
+        { sizeCm: "32x32x15", sizeInch: "1 1/4\"x1 1/4\"x1/2\"", code: "96001098", pkg: "15/75" }
+      ]
+    },
+    {
+      title: "Birla Brass FTA",
+      description: "Birla CPVC Brass Female Threaded Adapter.",
+      image: "https://picsum.photos/seed/birla-brass-fta/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Female Brass Threads", "Secure Connection", "Durable"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000081", pkg: "25/200" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000082", pkg: "10/150" },
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000083", pkg: "25/150" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000085", pkg: "10/100" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96000084", pkg: "15/150" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96000347", pkg: "15/150" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000238", pkg: "5/50" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96000239", pkg: "4/32" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96000240", pkg: "3/24" }
+      ]
+    },
+    {
+      title: "Birla Brass MTA",
+      description: "Birla CPVC Brass Male Threaded Adapter.",
+      image: "https://picsum.photos/seed/birla-brass-mta/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Male Brass Threads", "High Strength", "Reliable Seal"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000089", pkg: "10/150" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000090", pkg: "10/150" },
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000091", pkg: "15/150" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000092", pkg: "10/100" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96000345", pkg: "10/150" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96000346", pkg: "10/100" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000093", pkg: "5/50" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96000230", pkg: "4/32" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96000231", pkg: "3/24" }
+      ]
+    },
+    {
+      title: "Birla Ball Valve (Long Handle)",
+      description: "Birla CPVC Ball Valve with Long Handle for easy operation.",
+      image: "https://picsum.photos/seed/birla-ball-long/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Long Handle", "Easy Grip", "Smooth Flow Control"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000989", pkg: "1/100" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000991", pkg: "1/75" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000993", pkg: "1/45" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "98000574", pkg: "1/25" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "98000575", pkg: "1/16" },
+        { sizeCm: "50", sizeInch: "2\"", code: "98000576", pkg: "1/12" }
+      ]
+    },
+    {
+      title: "Birla Concealed Valve",
+      description: "Birla CPVC Concealed Valve for aesthetic plumbing installations.",
+      image: "https://picsum.photos/seed/birla-concealed/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Concealed Design", "Premium Finish", "Smooth Operation"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "98000310", pkg: "1/20" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "98001274", pkg: "1/20" },
+        { sizeCm: "25", sizeInch: "1\"", code: "98001275", pkg: "1/12" }
+      ]
+    },
+    {
+      title: "Birla Long Bend",
+      description: "Birla CPVC Long Bend for smooth direction changes.",
+      image: "https://picsum.photos/seed/birla-longbend/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Smooth Radius", "Reduced Friction", "High Quality"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000441", pkg: "20/160" }
+      ]
+    },
+    {
+      title: "Birla Long Bend Socket",
+      description: "Birla CPVC Long Bend with Socket connection.",
+      image: "https://picsum.photos/seed/birla-longbend-soc/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Socket Connection", "Smooth Flow", "Durable"],
+      tableData: [
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96001562", pkg: "25/100" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96001563", pkg: "10/80" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96001719", pkg: "7/42" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96001720", pkg: "4/24" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96001721", pkg: "3/12" }
+      ]
+    },
+    {
+      title: "Birla Thermal Expansion Loop",
+      description: "Birla CPVC Thermal Expansion Loop to accommodate thermal expansion and contraction.",
+      image: "https://picsum.photos/seed/birla-loop/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "CPVC FITTING",
+      features: ["Thermal Stress Relief", "Pre-Fabricated", "Reliable"],
+      tableData: [
+        { sizeCm: "15", sizeInch: "1/2\"", code: "96000483", pkg: "5/5" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000484", pkg: "6/6" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000485", pkg: "3/3" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000486", pkg: "3/3" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96000487", pkg: "2/2" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96000488", pkg: "2/2" }
+      ]
+    },
+    {
+      title: "Birla Hexagonal Brass MTA",
+      description: "Birla CPVC Hexagonal Brass Male Threaded Adapter for easy wrenching.",
+      image: "https://picsum.photos/seed/birla-hex-mta/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Hexagonal Design", "Brass Threads", "Easy Installation"],
+      tableData: [
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000293", pkg: "20/160" },
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000291", pkg: "15/150" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000287", pkg: "10/80" },
+        { sizeCm: "25x15", sizeInch: "1\"x1/2\"", code: "96001890", pkg: "25/100" },
+        { sizeCm: "25x20", sizeInch: "1\"x3/4\"", code: "96001891", pkg: "25/100" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000289", pkg: "5/40" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96001099", pkg: "8/32" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96001101", pkg: "8/24" }
+      ]
+    },
+    {
+      title: "Birla Hexagonal Brass FTA",
+      description: "Birla CPVC Hexagonal Brass Female Threaded Adapter.",
+      image: "https://picsum.photos/seed/birla-hex-fta/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "BRASS FITTING",
+      features: ["Hexagonal Grip", "Brass Threads", "Secure Fit"],
+      tableData: [
+        { sizeCm: "20", sizeInch: "3/4\"", code: "96000292", pkg: "10/100" },
+        { sizeCm: "20x15", sizeInch: "3/4\"x1/2\"", code: "96000294", pkg: "20/160" },
+        { sizeCm: "25", sizeInch: "1\"", code: "96000288", pkg: "10/60" },
+        { sizeCm: "32", sizeInch: "1 1/4\"", code: "96000290", pkg: "5/35" },
+        { sizeCm: "40", sizeInch: "1 1/2\"", code: "96001100", pkg: "8/32" },
+        { sizeCm: "50", sizeInch: "2\"", code: "96001102", pkg: "8/24" }
+      ]
+    },
+    {
+      title: "Birla Union Ball Valve (SS)",
+      description: "Birla CPVC Union Ball Valve with Stainless Steel components.",
+      image: "https://picsum.photos/seed/birla-union-valve/400/400",
+      bgColor: "bg-slate-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Union Connection", "SS Components", "High Performance"],
+      tableData: [
+        { sizeCm: "20", sizeInch: "3/4\"", code: "98000611", pkg: "1" }
+      ]
+    },
+    {
+      title: "Birla Concealed Valve (Round/Square)",
+      description: "Birla CPVC Concealed Valve available in Round and Square types.",
+      image: "https://picsum.photos/seed/birla-concealed-types/400/400",
+      bgColor: "bg-blue-50",
+      brand: "Birla",
+      category: "VALVE",
+      features: ["Round & Square Options", "Modern Aesthetics", "Reliable Control"],
+      tableData: [
+        { sizeCm: "15 (Round)", sizeInch: "1/2\"", code: "96001362", pkg: "1/20" },
+        { sizeCm: "20 (Round)", sizeInch: "3/4\"", code: "96001363", pkg: "1/20" },
+        { sizeCm: "25 (Round)", sizeInch: "1\"", code: "96001364", pkg: "1/20" },
+        { sizeCm: "15 (Square)", sizeInch: "1/2\"", code: "96001071", pkg: "1/20" },
+        { sizeCm: "20 (Square)", sizeInch: "3/4\"", code: "96001072", pkg: "1/20" },
+        { sizeCm: "25 (Square)", sizeInch: "1\"", code: "96001073", pkg: "1/20" }
+      ]
     }
   ];
 
+  const supremeCpvcProducts: CPVCProduct[] = [
+    { name: 'Supreme Concealed Valve FULL TURN Round +PLUG 3/4"', sku: 'SUP-CV-FTR-34' },
+    { name: 'Supreme Concealed Valve FULL TURN Round +PLUG 1"', sku: 'SUP-CV-FTR-1' },
+    { name: 'Supreme Conce valve QTR TURN Round (DNM)+PLUG 1"', sku: 'SUP-CV-QTR-DNM-1' },
+    { name: 'Supreme Concealed Valve FULL TURN Round 3/4"', sku: 'SUP-CV-FTR-34-NP' },
+    { name: 'Supreme Concealed Valve FULL TURN Round 1"', sku: 'SUP-CV-FTR-1-NP' },
+    { name: 'Supreme Conce valve QTR TURN Round (DNM)+PLUG 3/4"', sku: 'SUP-CV-QTR-DNM-34' },
+    { name: 'Supreme Conce valve QTR TURN Round (AH)+ PLUG 3/4"', sku: 'SUP-CV-QTR-AH-34' },
+    { name: 'Supreme Conce valve QTR TURN Round (AB)+PLUG 3/4"', sku: 'SUP-CV-QTR-AB-34' },
+    { name: 'Supreme Conce valve Long QTR TURN Round (DNM) 1/2"', sku: 'SUP-CV-LQTR-DNM-12' },
+    { name: 'Supreme Concealed Valve Long QTR TURN Round 3/4"', sku: 'SUP-CV-LQTR-34' },
+    { name: 'Supreme Concealed Valve Short QTR TURN Round 3/4"', sku: 'SUP-CV-SQTR-34' },
+    { name: 'Supreme Concealed Valve Long QTR TURN Square 3/4"', sku: 'SUP-CV-LQTS-34' },
+    { name: 'Supreme Concealed Valve Short QTR TURN Square 3/4"', sku: 'SUP-CV-SQTS-34' },
+    { name: 'Supreme Concealed Valve Long QTR TURN Triangle 3/4"', sku: 'SUP-CV-LQTT-34' },
+    { name: 'Supreme Concealed Valve Short QTR TURN Triangle 3/4"', sku: 'SUP-CV-SQTT-34' },
+    { name: 'Supreme Screw Tap-Hand Wheel Cpvc 3/4"', sku: 'SUP-ST-HW-34' },
+    { name: 'Supreme Swing Check Valve Sch 80 3/4"', sku: 'SUP-SCV-80-34' },
+    { name: 'Supreme Hex Nipple 1/2"', sku: 'SUP-HN-12' },
+    { name: 'Supreme Hex Nipple 3/4"', sku: 'SUP-HN-34' },
+    { name: 'Supreme Hex Nipple 1"', sku: 'SUP-HN-1' },
+    { name: 'Supreme Hex Nipple 1 1/4"', sku: 'SUP-HN-114' },
+    { name: 'Supreme Hex Nipple 1 1/2"', sku: 'SUP-HN-112' },
+    { name: 'Supreme Y Strainer (Brass) 1"', sku: 'SUP-YS-B-1' },
+    { name: 'Supreme Y Strainer (Brass) 1 1/4"', sku: 'SUP-YS-B-114' },
+    { name: 'Supreme Y Strainer (Brass) 1 1/2"', sku: 'SUP-YS-B-112' },
+    { name: 'Supreme Y Strainer WITH PLAIN CAP 1"', sku: 'SUP-YS-PC-1' },
+    { name: 'Supreme Y Strainer WITH PLAIN CAP 1 1/4"', sku: 'SUP-YS-PC-114' },
+    { name: 'Supreme Y Strainer WITH PLAIN CAP 1 1/2"', sku: 'SUP-YS-PC-112' },
+    { name: 'Supreme Reducer 3/4"x1/2"', sku: 'SUP-RED-34x12' },
+    { name: 'Supreme Reducer 1"x1/2"', sku: 'SUP-RED-1x12' },
+    { name: 'Supreme Reducer 1"x3/4"', sku: 'SUP-RED-1x34' },
+    { name: 'Supreme Reducer 1 1/4"x1/2"', sku: 'SUP-RED-114x12' },
+    { name: 'Supreme Reducer 1 1/4"x3/4"', sku: 'SUP-RED-114x34' },
+    { name: 'Supreme Reducer 1 1/2"x1"', sku: 'SUP-RED-112x1' },
+    { name: 'Supreme Reducer 1 1/2"x1 1/4"', sku: 'SUP-RED-112x114' },
+    { name: 'Supreme Reducer 2"x3/4"', sku: 'SUP-RED-2x34' },
+    { name: 'Supreme Reducer 2"x1"', sku: 'SUP-RED-2x1' },
+    { name: 'Supreme Reducing Elbow (Plastic) 3/4"x1/2"', sku: 'SUP-RE-P-34x12' },
+    { name: 'Supreme Reducing Elbow (Plastic) 1"x1/2"', sku: 'SUP-RE-P-1x12' },
+    { name: 'Supreme Reducing Elbow (Plastic) 1"x3/4"', sku: 'SUP-RE-P-1x34' },
+    { name: 'Supreme Reducing Elbow (Plastic) 1 1/4"x3/4"', sku: 'SUP-RE-P-114x34' },
+    { name: 'Supreme Reducing Elbow (Plastic) 1 1/2"x1"', sku: 'SUP-RE-P-112x1' },
+    { name: 'Supreme Reducing Elbow (Plastic) 1 1/2"x1 1/4"', sku: 'SUP-RE-P-112x114' },
+    { name: 'Supreme Reducing Elbow (Plastic) 2"x1"', sku: 'SUP-RE-P-2x1' },
+    { name: 'Supreme Red. Bush 3/4"x1/2"', sku: 'SUP-RB-34x12' },
+    { name: 'Supreme Red. Bush 1"x1/2"', sku: 'SUP-RB-1x12' },
+    { name: 'Supreme Red. Bush 1"x3/4"', sku: 'SUP-RB-1x34' },
+    { name: 'Supreme Red. Bush 1 1/4"x1/2"', sku: 'SUP-RB-114x12' },
+    { name: 'Supreme Red. Bush 1 1/4"x3/4"', sku: 'SUP-RB-114x34' },
+    { name: 'Supreme Red. Bush 1 1/2"x1"', sku: 'SUP-RB-112x1' },
+    { name: 'Supreme Red. Bush 1 1/2"x1 1/4"', sku: 'SUP-RB-112x114' },
+    { name: 'Supreme Red. Bush 2"x1/2"', sku: 'SUP-RB-2x12' },
+    { name: 'Supreme Red. Bush 2"x3/4"', sku: 'SUP-RB-2x34' },
+    { name: 'Supreme Red. Bush 2"x1"', sku: 'SUP-RB-2x1' },
+    { name: 'Supreme Red. Tee 3/4"x1/2"', sku: 'SUP-RT-34x12' },
+    { name: 'Supreme Red. Tee 1"x1/2"', sku: 'SUP-RT-1x12' },
+    { name: 'Supreme Red. Tee 1"x3/4"', sku: 'SUP-RT-1x34' },
+    { name: 'Supreme Red. Tee 1 1/4"x1/2"', sku: 'SUP-RT-114x12' },
+    { name: 'Supreme Red. Tee 1 1/4"x3/4"', sku: 'SUP-RT-114x34' },
+    { name: 'Supreme Red. Tee 1 1/2"x1"', sku: 'SUP-RT-112x1' },
+    { name: 'Supreme Red. Tee 1 1/2"x1 1/4"', sku: 'SUP-RT-112x114' },
+    { name: 'Supreme Red. Tee 2"x1/2"', sku: 'SUP-RT-2x12' },
+    { name: 'Supreme Red. Tee 2"x3/4"', sku: 'SUP-RT-2x34' },
+    { name: 'Supreme Red. Tee 2"x1"', sku: 'SUP-RT-2x1' },
+    { name: 'Supreme Red. Tee w/o Rib 1"x3/4"', sku: 'SUP-RT-NR-1x34' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) 3/4"x1/2"', sku: 'SUP-RFTE-M-34x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) 1"x1/2"', sku: 'SUP-RFTE-M-1x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) 1"x3/4"', sku: 'SUP-RFTE-M-1x34' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) 1 1/4"x1/2"', sku: 'SUP-RFTE-M-114x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Brass w/o Rib) 3/4"x1/2"', sku: 'SUP-RFTE-B-34x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Brass w/o Rib) 1"x1/2"', sku: 'SUP-RFTE-B-1x12' },
+    { name: 'Supreme Red. M.Th. Elbow (Metal) 3/4"x1/2"', sku: 'SUP-RMTE-M-34x12' },
+    { name: 'Supreme Red. F.Th. Tee (Metal) 3/4"x1/2"', sku: 'SUP-RFTT-M-34x12' },
+    { name: 'Supreme Red. F.Th. Tee (Metal) 1"x1/2"', sku: 'SUP-RFTT-M-1x12' },
+    { name: 'Supreme Red. F.Th. Tee (Metal) 1"x3/4"', sku: 'SUP-RFTT-M-1x34' },
+    { name: 'Supreme Red. F.Th. Tee (Metal) 1 1/4"x1/2"', sku: 'SUP-RFTT-M-114x12' },
+    { name: 'Supreme Red. F.Th. Tee (Metal) W/o Rib 3/4"x1/2"', sku: 'SUP-RFTT-M-NR-34x12' },
+    { name: 'Supreme Red. M.Th. Tee (Metal) 3/4"x1/2"', sku: 'SUP-RMTT-M-34x12' },
+    { name: 'Supreme Red. F. T. A. (Metal) 3/4"x1/2"', sku: 'SUP-RFTA-M-34x12' },
+    { name: 'Supreme Red. F. T. A. (Metal) 1"x1/2"', sku: 'SUP-RFTA-M-1x12' },
+    { name: 'Supreme Red. F. T. A. (Metal) 1"x3/4"', sku: 'SUP-RFTA-M-1x34' },
+    { name: 'Supreme Red. F.T. A. (Plastic) 3/4"x1/2"', sku: 'SUP-RFTA-P-34x12' },
+    { name: 'Supreme Red. M. T. A. (Metal) 3/4"x1/2"', sku: 'SUP-RMTA-M-34x12' },
+    { name: 'Supreme Red. M. T. A. (Metal) 1"x1/2"', sku: 'SUP-RMTA-M-1x12' },
+    { name: 'Supreme Red. M. T. A. (Metal) 1"x3/4"', sku: 'SUP-RMTA-M-1x34' },
+    { name: 'Supreme Red. M. T. A. (Plastic) 3/4"x1/2"', sku: 'SUP-RMTA-P-34x12' },
+    { name: 'Supreme ELBOW HOLDER (Plastic) 3/4"x1/2"', sku: 'SUP-EH-P-34x12' },
+    { name: 'Supreme Wall Mixer Fixture 3/4"x1/2"', sku: 'SUP-WMF-34x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (TOP & BOTTOM) 3/4"x1/2"', sku: 'SUP-WMFS-TB-34x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (TOP & BOTTOM) 1"x1/2"', sku: 'SUP-WMFS-TB-1x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (TOP & SIDE) 3/4"x1/2"', sku: 'SUP-WMFS-TS-34x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (TOP & SIDE) 1"x1/2"', sku: 'SUP-WMFS-TS-1x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (ALL TOP) 3/4"x1/2"', sku: 'SUP-WMFS-AT-34x12' },
+    { name: 'Supreme Wall Mixer Fixture SET (ALL TOP) 1"x1/2"', sku: 'SUP-WMFS-AT-1x12' },
+    { name: 'Supreme Reducer SDR 9 1"x3/4"', sku: 'SUP-RED-SDR9-1x34' },
+    { name: 'Supreme Red. F. T. A. (Metal) SDR 9 3/4"x1/2"', sku: 'SUP-RFTA-M-SDR9-34x12' },
+    { name: 'Supreme Red. F. T. A. (Metal) SDR 9 1"x1/2"', sku: 'SUP-RFTA-M-SDR9-1x12' },
+    { name: 'Supreme Red. M. T. A. (Metal) SDR 9 3/4"x1/2"', sku: 'SUP-RMTA-M-SDR9-34x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) SDR 9 3/4"x1/2"', sku: 'SUP-RFTE-M-SDR9-34x12' },
+    { name: 'Supreme Red. F.Th. Elbow (Metal) SDR 9 1"x1/2"', sku: 'SUP-RFTE-M-SDR9-1x12' }
+  ].map(prod => ({
+    title: prod.name,
+    description: "Supreme CPVC Fitting. High quality and durable.",
+    image: "https://images.unsplash.com/photo-1581094288338-2314dddb7bc3?q=80&w=2070&auto=format&fit=crop",
+    bgColor: "bg-blue-50",
+    brand: "Supreme",
+    category: "CPVC FITTING",
+    features: ["Supreme Quality", "Durable", "Easy Installation"],
+    tableData: [
+      { sizeCm: "-", sizeInch: "-", code: prod.sku, pkg: "-", price: "Price on Request" }
+    ]
+  }));
+
   // Combine hardcoded and DB products
-  const allProducts = [...cpvcProducts, ...dbProducts];
+  const allProducts = [...cpvcProducts, ...supremeCpvcProducts, ...dbProducts];
 
   // Filtered products
   const filteredProducts = allProducts.filter(product => {
-    const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          product.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (product.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (product.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
     const matchesBrand = product.brand === selectedBrand;
-    return matchesSearch && matchesCategory && matchesBrand;
+    
+    const matchesSize = selectedSize === 'All' || 
+                        product.size === selectedSize || 
+                        product.tableData?.some(row => row.sizeInch === selectedSize || row.sizeCm === selectedSize);
+    
+    const matchesPressure = selectedPressure === 'All' || product.pressureRating === selectedPressure;
+
+    return matchesSearch && matchesCategory && matchesBrand && matchesSize && matchesPressure;
   });
+  
+  console.log("CPVC Page state:", { selectedBrand, selectedCategory, dbProductsCount: dbProducts.length, allProductsCount: allProducts.length, filteredCount: filteredProducts.length });
 
   return (
     <div className="pt-20 min-h-screen bg-white">
@@ -4353,23 +5187,50 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
             />
           </div>
           
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 lg:pb-0 w-full lg:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <div className="p-2 text-slate-400 shrink-0">
-              <BarChart3 size={20} className="rotate-90" />
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <select
+              value={selectedSize}
+              onChange={(e) => setSelectedSize(e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-bold focus:ring-2 focus:ring-brand-orange/20 outline-none"
+            >
+              <option value="All">All Sizes</option>
+              <option value='1/2"'>1/2"</option>
+              <option value='3/4"'>3/4"</option>
+              <option value='1"'>1"</option>
+              <option value='1 1/4"'>1 1/4"</option>
+              <option value='1 1/2"'>1 1/2"</option>
+              <option value='2"'>2"</option>
+            </select>
+
+            <select
+              value={selectedPressure}
+              onChange={(e) => setSelectedPressure(e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-bold focus:ring-2 focus:ring-brand-orange/20 outline-none"
+            >
+              <option value="All">All Pressure</option>
+              <option value="SDR 11">SDR 11</option>
+              <option value="SDR 13.5">SDR 13.5</option>
+              <option value="SCH 40">SCH 40</option>
+              <option value="SCH 80">SCH 80</option>
+            </select>
+
+            <div className="h-8 w-[1px] bg-slate-200 mx-2 hidden lg:block"></div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-6 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${
+                    selectedCategory === cat
+                      ? 'bg-brand-orange border-brand-orange text-brand-dark shadow-lg shadow-brand-orange/20'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-brand-orange/50'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
             </div>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-6 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all border ${
-                  selectedCategory === cat
-                    ? 'bg-brand-orange border-brand-orange text-brand-dark shadow-lg shadow-brand-orange/20'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-brand-orange/50'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
           </div>
         </div>
       </section>
@@ -4406,6 +5267,9 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">No products found</h3>
               <p className="text-slate-500">Try adjusting your search or filters to find what you're looking for.</p>
+              <div className="text-xs text-slate-400 mt-4 mb-4">
+                Debug: Brand={selectedBrand}, Cat={selectedCategory}, DB={dbProducts.length}, All={allProducts.length}
+              </div>
               <button 
                 onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
                 className="mt-6 text-brand-orange font-bold hover:underline"

@@ -12,9 +12,26 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Helper to format table
+  const formatTable = (items: any[]) => {
+    let table = `<table border="1" style="border-collapse: collapse; width: 100%;">
+      <thead>
+        <tr><th>Item</th><th>Qty</th><th>Rate</th></tr>
+      </thead>
+      <tbody>`;
+    items.forEach(item => {
+      table += `<tr><td>${item.product}</td><td>${item.qty}</td><td>${item.rate}</td></tr>`;
+    });
+    table += `</tbody></table>`;
+    return table;
+  };
+
   // Email sending route
   app.post("/api/send-email", async (req, res) => {
-    const { to, subject, body } = req.body;
+    const { toEmail, subject, message, items } = req.body;
+
+    const tableHtml = items ? formatTable(items) : "";
+    const fullBody = `${message}<br><br>${tableHtml}`;
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -27,9 +44,9 @@ async function startServer() {
     try {
       await transporter.sendMail({
         from: process.env.GMAIL_USER,
-        to,
+        to: toEmail,
         subject,
-        text: body,
+        html: fullBody,
       });
       res.json({ success: true });
     } catch (error) {

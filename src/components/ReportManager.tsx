@@ -56,8 +56,35 @@ const ReportManager = () => {
   }, []);
 
   const exportReport = () => {
-    alert("Exporting report as CSV...");
-    // In a real app, this would generate and download a file
+    if (recentOrders.length === 0) {
+      alert("No data to export.");
+      return;
+    }
+
+    const headers = ['Order ID', 'Customer Name', 'Customer Email', 'Total Amount', 'Status', 'Date'];
+    const csvRows = [headers.join(',')];
+
+    recentOrders.forEach(order => {
+      const row = [
+        order.id,
+        `"${order.customerName || 'Guest'}"`,
+        `"${order.customerEmail || ''}"`,
+        order.total || 0,
+        order.status || 'unknown',
+        order.createdAt ? `"${order.createdAt.toDate().toLocaleString()}"` : '""'
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `sales_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (

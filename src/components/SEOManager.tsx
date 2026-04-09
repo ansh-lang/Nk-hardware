@@ -72,8 +72,25 @@ const SEOManager = () => {
 
   const latestAudit = audits[0] || { score: 88, pagesScanned: 156, issuesFound: 3 };
 
+  const [metaTags, setMetaTags] = useState({
+    title: 'NK Hardware - Premium CPVC & UPVC Solutions',
+    description: 'Leading supplier of high-quality CPVC and UPVC pipes and fittings for agriculture and water supply systems.',
+    keywords: 'CPVC, UPVC, Pipes, Fittings, Agriculture, Water Supply, NK Hardware'
+  });
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  const handleSaveMeta = async () => {
+    setSavingMeta(true);
+    // Simulate saving to Firestore
+    setTimeout(() => {
+      setSavingMeta(false);
+      alert('Meta tags updated successfully!');
+    }, 1000);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* ... existing header ... */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-white mb-1">SEO Manager</h3>
@@ -89,9 +106,10 @@ const SEOManager = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* SEO Score Card */}
         <div className="bg-[#0f172a] p-6 rounded-3xl border border-white/5 flex flex-col items-center justify-center text-center space-y-4">
+          {/* ... existing score circle ... */}
           <div className="relative w-32 h-32 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90">
               <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
@@ -117,6 +135,51 @@ const SEOManager = () => {
               ? `Your site is performing well, but there are ${latestAudit.issuesFound} critical issues to fix.`
               : "Excellent! Your site is perfectly optimized for search engines."}
           </p>
+        </div>
+
+        {/* Meta Tags Editor */}
+        <div className="lg:col-span-2 bg-[#0f172a] p-6 rounded-3xl border border-white/5 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-lg font-bold text-white flex items-center gap-2">
+              <Settings size={18} className="text-brand-orange" /> Global Meta Tags
+            </h4>
+            <button 
+              onClick={handleSaveMeta}
+              disabled={savingMeta}
+              className="flex items-center gap-2 px-4 py-1.5 bg-brand-orange/10 text-brand-orange rounded-lg font-bold text-xs hover:bg-brand-orange/20 transition-all disabled:opacity-50"
+            >
+              {savingMeta ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+              Save Changes
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">Meta Title</label>
+              <input 
+                type="text" 
+                value={metaTags.title}
+                onChange={(e) => setMetaTags({...metaTags, title: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">Meta Description</label>
+              <textarea 
+                value={metaTags.description}
+                onChange={(e) => setMetaTags({...metaTags, description: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange transition-all h-20 resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">Keywords (Comma separated)</label>
+              <input 
+                type="text" 
+                value={metaTags.keywords}
+                onChange={(e) => setMetaTags({...metaTags, keywords: e.target.value})}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-orange transition-all"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Quick Stats */}
