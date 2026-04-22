@@ -1884,16 +1884,27 @@ const Navbar = ({ onOpenQuote, onOpenAdmin, onViewChange, quoteItemCount = 0 }: 
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0f172a]/95 backdrop-blur-md text-white border-b border-white/5">
-      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
-        {/* Logo */}
-        <div 
-          className="flex items-center gap-1 text-xl md:text-2xl font-bold shrink-0 cursor-pointer"
-          onClick={() => onViewChange('HOME')}
-        >
-          <span className="text-white">Quality</span>
-          <span className="text-brand-orange">Fittings</span>
+    <nav className="fixed top-0 left-0 right-0 z-50">
+      {/* Top Strip (Micro-Header) */}
+      <div className="bg-brand-orange text-brand-dark px-4 py-1.5 text-[11px] md:text-xs font-bold w-full hidden sm:block">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-center gap-2 md:gap-4 tracking-wide">
+          <span className="flex items-center gap-1.5"><Truck size={14} /> Free Delivery on Orders above ₹50,000</span>
+          <span className="text-brand-dark/50">|</span>
+          <span className="flex items-center gap-1.5"><PhoneCall size={14} /> Wholesale Inquiry: +91-9720356263</span>
         </div>
+      </div>
+      
+      {/* Main Navbar */}
+      <div className="bg-[#0f172a]/95 backdrop-blur-md text-white border-b border-white/5">
+        <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
+          {/* Logo */}
+          <div 
+            className="flex items-center gap-1 text-xl md:text-2xl font-bold shrink-0 cursor-pointer"
+            onClick={() => onViewChange('HOME')}
+          >
+            <span className="text-white">Quality</span>
+            <span className="text-brand-orange">Fittings</span>
+          </div>
         
         {/* Desktop Navigation */}
         <div className="hidden lg:flex items-center gap-8 text-[15px] font-medium text-white/90">
@@ -1954,6 +1965,37 @@ const Navbar = ({ onOpenQuote, onOpenAdmin, onViewChange, quoteItemCount = 0 }: 
                 </>
               )}
             </AnimatePresence>
+          </div>
+
+          {/* Brands Dropdown */}
+          <div className="relative group">
+            <div 
+              className={`flex items-center gap-1 cursor-pointer transition-colors hover:text-brand-orange`}
+            >
+              Brands <ChevronDown size={14} className={`transition-transform duration-300 group-hover:rotate-180`} />
+            </div>
+            
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 pt-2 w-48 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden py-2">
+                {['Supreme', 'Astral', 'Finolex', 'Tirupati'].map((brand, idx) => (
+                  <a 
+                    key={idx}
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onViewChange('CPVC_PIPES');
+                      setTimeout(() => {
+                        // Assuming global search/filter handles brand selection
+                        window.dispatchEvent(new CustomEvent('nav-brand-select', { detail: brand }));
+                      }, 100);
+                    }}
+                    className="block px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-brand-orange/10 hover:text-brand-orange transition-colors"
+                  >
+                    {brand}
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
 
           <a href="#" onClick={(e) => { e.preventDefault(); onViewChange('WHY_US'); }} className="hover:text-brand-orange transition-colors">Why Us</a>
@@ -2167,6 +2209,7 @@ const Navbar = ({ onOpenQuote, onOpenAdmin, onViewChange, quoteItemCount = 0 }: 
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </nav>
   );
 };
@@ -2465,9 +2508,46 @@ const QuoteModal = ({ isOpen, onClose, initialMessage = '', onSuccess }: { isOpe
   );
 };
 
-const Hero = ({ onOpenQuote }: { onOpenQuote: () => void }) => {
+const Hero = ({ onOpenQuote, onSearch, onExplore }: { onOpenQuote: () => void, onSearch: (query: string) => void, onExplore: () => void }) => {
+  const [localSearch, setLocalSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const POPULAR_SEARCHES = [
+    "CPVC Pipe SDR-11",
+    "CPVC Pipe SDR-13.5",
+    "Coupler",
+    "Elbow 90°",
+    "Elbow 45°",
+    "Tee",
+    "Brass Tee",
+    "Brass Elbow",
+    "Concealed Valve",
+    "Ball Valve",
+    "Reducer",
+    "Reducing Tee",
+    "End Cap",
+    "Union",
+    "Cross Tee",
+    "Step Over Bend",
+    "Tank Nipple",
+    "Flange",
+    "Solvent Cement",
+    "Supreme CPVC",
+    "Astral PRO",
+    "Tirupati SDR 11"
+  ];
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && localSearch.trim()) {
+      setShowDropdown(false);
+      onSearch(localSearch.trim());
+    }
+  };
+
+  const filteredSuggestions = POPULAR_SEARCHES.filter(s => s.toLowerCase().includes(localSearch.toLowerCase()));
+
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-32 pb-12 overflow-hidden">
+    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-40 pb-12 overflow-hidden">
       {/* Background with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
@@ -2513,12 +2593,74 @@ const Hero = ({ onOpenQuote }: { onOpenQuote: () => void }) => {
           transition={{ delay: 0.3 }}
           className="relative max-w-xl mx-auto mb-6 md:mb-8"
         >
-          <input 
-            type="text" 
-            placeholder="Search products..."
-            className="w-full bg-white text-slate-900 px-4 md:px-6 py-3 md:py-4 rounded-xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-brand-orange text-sm md:text-base"
-          />
-          <Search className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <div className="relative">
+            <input 
+              type="text" 
+              placeholder="Search products..."
+              value={localSearch}
+              onChange={(e) => {
+                setLocalSearch(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+              onKeyDown={handleSearchKeyPress}
+              className="w-full bg-white text-slate-900 px-4 md:px-6 py-3 md:py-4 rounded-xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-brand-orange text-sm md:text-base pr-12"
+            />
+            <button 
+              onClick={() => {
+                if(localSearch.trim()) {
+                  setShowDropdown(false);
+                  onSearch(localSearch.trim());
+                }
+              }}
+              className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 p-2 bg-brand-orange text-brand-dark rounded-lg hover:bg-orange-400 transition-colors"
+            >
+              <Search size={18} />
+            </button>
+            
+            {/* Autocomplete Dropdown */}
+            <AnimatePresence>
+              {showDropdown && localSearch.trim().length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl overflow-hidden z-50 text-left border border-slate-100 max-h-60 overflow-y-auto"
+                >
+                  {filteredSuggestions.length > 0 ? (
+                    filteredSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setLocalSearch(suggestion);
+                          setShowDropdown(false);
+                          setTimeout(() => onSearch(suggestion), 50);
+                        }}
+                        className="w-full text-left px-6 py-3 text-slate-700 hover:bg-slate-50 hover:text-brand-orange transition-colors border-b border-slate-100 last:border-0 flex items-center gap-3"
+                      >
+                        <Search size={14} className="text-slate-400" />
+                        {suggestion}
+                      </button>
+                    ))
+                  ) : (
+                    <button 
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setShowDropdown(false);
+                        onSearch(localSearch.trim());
+                      }}
+                      className="w-full text-left px-6 py-3 text-slate-700 hover:bg-slate-50 hover:text-brand-orange transition-colors flex items-center gap-3"
+                    >
+                      <Search size={14} className="text-slate-400" />
+                      Search for "{localSearch}"
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </motion.div>
 
         <motion.div 
@@ -2527,7 +2669,10 @@ const Hero = ({ onOpenQuote }: { onOpenQuote: () => void }) => {
           transition={{ delay: 0.4 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4"
         >
-          <button className="w-full sm:w-auto bg-brand-orange text-brand-dark px-6 md:px-8 py-3 md:py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-400 transition-all group text-sm md:text-base">
+          <button 
+            onClick={onExplore}
+            className="w-full sm:w-auto bg-brand-orange text-brand-dark px-6 md:px-8 py-3 md:py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-orange-400 transition-all group text-sm md:text-base"
+          >
             Explore Products <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </button>
           <button 
@@ -2562,25 +2707,25 @@ const PriceBanner = () => {
 const FloatingButtons = ({ onOpenChat }: { onOpenChat: () => void }) => {
   return (
     <>
-      <div className="fixed bottom-16 left-6 z-50">
+      <div className="fixed bottom-12 left-6 z-50">
         <div 
           onClick={onOpenChat}
-          className="bg-brand-orange p-3 rounded-full shadow-lg cursor-pointer hover:scale-110 transition-transform group relative"
+          className="bg-brand-orange w-10 h-10 flex items-center justify-center rounded-full shadow-lg cursor-pointer hover:scale-110 transition-transform group relative"
         >
-          <Bot size={24} className="text-brand-dark" />
+          <Bot size={20} className="text-brand-dark" />
           <span className="absolute left-full ml-3 px-2 py-1 bg-brand-dark text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
             AI Assistant
           </span>
         </div>
       </div>
-      <div className="fixed bottom-16 right-6 z-50">
+      <div className="fixed bottom-12 right-6 z-50">
         <a 
           href="https://wa.me/919876543210" 
           target="_blank" 
           rel="noreferrer"
-          className="bg-[#22c55e] p-4 rounded-full shadow-lg cursor-pointer hover:scale-110 transition-transform block"
+          className="bg-[#22c55e] w-12 h-12 flex items-center justify-center rounded-full shadow-lg cursor-pointer hover:scale-110 transition-transform block"
         >
-          <MessageCircle size={28} className="text-white fill-white" />
+          <MessageCircle size={24} className="text-white fill-white" />
         </a>
       </div>
     </>
@@ -3379,98 +3524,159 @@ const Footer = ({ onViewChange }: { onViewChange: (view: any) => void }) => {
   );
 };
 
-const SmartAISolutions = () => {
-  const categories = [
+const HowWeWork = () => {
+  const steps = [
     {
-      title: "Customer Experience",
-      icon: <Users className="text-brand-orange" size={24} />,
-      features: ["24/7 AI Chatbot Support", "Visual Product Search", "Smart Recommendations", "AR Fitting Preview"]
+      title: "Send Your Requirements",
+      desc: "Share your material list via WhatsApp, Email, or our Form.",
+      icon: <FileText className="text-brand-orange" size={24} />,
+      step: "01"
     },
     {
-      title: "Supply Chain",
+      title: "Get Best Wholesale Quote",
+      desc: "We analyze your list and provide the most competitive B2B pricing instantly.",
       icon: <BarChart3 className="text-brand-orange" size={24} />,
-      features: ["Predictive Restocking", "Route Optimization", "Demand Forecasting", "Automated Invoicing"]
+      step: "02"
     },
     {
-      title: "Quality Control",
-      icon: <Eye className="text-brand-orange" size={24} />,
-      features: ["Visual Defect Detection", "Pressure Test Monitoring", "Strength Analysis", "Compliance Checks"]
-    },
-    {
-      title: "Engineering",
-      icon: <Settings className="text-brand-orange" size={24} />,
-      features: ["Generative Joint Design", "Flow Simulations", "CAD Automation", "Cost Estimation"]
+      title: "Confirm & Fast Delivery",
+      desc: "Approve the quote and get fast, reliable delivery directly to your project site.",
+      icon: <Truck className="text-brand-orange" size={24} />,
+      step: "03"
     }
   ];
 
   return (
-    <section className="py-24 bg-[#020617] text-white px-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
-          <div className="max-w-2xl">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-3 text-brand-orange font-bold text-sm uppercase tracking-widest mb-4"
-            >
-              <Cpu size={20} />
-              Future of Fittings
-            </motion.div>
-            <motion.h2 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              className="text-4xl md:text-5xl font-bold"
-            >
-              Smart <span className="text-brand-orange">AI Powered</span> Solutions
-            </motion.h2>
-          </div>
-          <motion.p 
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            className="text-slate-400 max-w-md"
+    <section className="py-24 bg-[#0f172a] text-white px-6">
+      <div className="max-w-7xl mx-auto text-center mb-16">
+        <motion.span 
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          className="text-brand-orange font-bold text-sm uppercase tracking-widest mb-4 block"
+        >
+          Order Process
+        </motion.span>
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          className="text-4xl md:text-5xl font-bold"
+        >
+          How To Order Bulk Material?
+        </motion.h2>
+      </div>
+
+      <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+        {/* Connecting lines for desktop */}
+        <div className="hidden md:block absolute top-[60px] left-1/6 right-1/6 h-[2px] bg-gradient-to-r from-brand-orange/0 via-brand-orange/30 to-brand-orange/0"></div>
+
+        {steps.map((step, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="flex flex-col items-center text-center relative z-10"
           >
-            Hum AI technology ka use karke aapke projects ko fast, accurate aur cost-effective banate hain. 100+ smart features for your business.
-          </motion.p>
+            <div className="w-20 h-20 bg-[#1e293b] border-2 border-brand-orange/50 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(249,115,22,0.15)] relative">
+              {step.icon}
+              <div className="absolute -top-3 -right-3 w-8 h-8 bg-brand-orange text-brand-dark font-black rounded-full flex items-center justify-center text-sm">
+                {step.step}
+              </div>
+            </div>
+            <h3 className="text-xl font-bold mb-4">{step.title}</h3>
+            <p className="text-slate-400 text-sm leading-relaxed">{step.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        className="mt-16 text-center"
+      >
+        <button className="bg-brand-orange text-brand-dark px-10 py-4 rounded-xl font-bold hover:bg-orange-400 transition-colors shadow-lg shadow-brand-orange/20 flex items-center gap-2 mx-auto">
+          <MessageCircle size={20} />
+          WhatsApp Your List Now
+        </button>
+      </motion.div>
+    </section>
+  );
+};
+
+const TrustTestimonials = () => {
+  const testimonials = [
+    {
+      name: "Ramesh Singh",
+      role: "Project Contractor",
+      content: "Anjul Sanitaryware is our go-to supplier for all major plumbing projects in Noida. Their rates are unbeatable and delivery is always on time.",
+      rating: 5
+    },
+    {
+      name: "Amit Gupta",
+      role: "Plumbing Agency Owner",
+      content: "Great support for wholesale orders! The team gives us the best discounts on Astral and Supreme materials. Very trustworthy.",
+      rating: 5
+    },
+    {
+      name: "Rahul Verma",
+      role: "Independent Builder",
+      content: "I shifted all my procurement to them. Their clear quotations and zero-hassle delivery directly to my construction sites save me a lot of time.",
+      rating: 5
+    }
+  ];
+
+  return (
+    <section className="py-24 bg-[#f8fafc] px-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-16">
+          <motion.span 
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="text-brand-orange font-bold text-sm uppercase tracking-widest mb-4 block"
+          >
+            Client Success
+          </motion.span>
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="text-4xl md:text-5xl font-bold text-slate-900"
+          >
+            Trusted By The Trade
+          </motion.h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((cat, idx) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {testimonials.map((testi, idx) => (
             <motion.div
               key={idx}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
-              className="bg-white/5 border border-white/10 p-8 rounded-3xl hover:bg-white/10 transition-all group"
+              className="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/40 relative"
             >
-              <div className="w-12 h-12 bg-brand-orange/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                {cat.icon}
+              <div className="absolute top-6 right-8 text-brand-orange/20">
+                <MessageSquare size={48} />
               </div>
-              <h3 className="text-xl font-bold mb-6">{cat.title}</h3>
-              <ul className="space-y-4">
-                {cat.features.map((feature, fIdx) => (
-                  <li key={fIdx} className="flex items-center gap-3 text-slate-400 text-sm">
-                    <Zap size={14} className="text-brand-orange shrink-0" />
-                    {feature}
-                  </li>
+              <div className="flex gap-1 text-brand-orange mb-6">
+                {[...Array(testi.rating)].map((_, i) => (
+                  <Star key={i} size={16} fill="currentColor" />
                 ))}
-              </ul>
+              </div>
+              <p className="text-slate-600 mb-8 italic relative z-10 leading-relaxed">
+                "{testi.content}"
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-700 font-bold uppercase">
+                  {testi.name.charAt(0)}
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900">{testi.name}</h4>
+                  <p className="text-sm text-brand-orange font-medium">{testi.role}</p>
+                </div>
+              </div>
             </motion.div>
           ))}
         </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          className="mt-16 p-8 bg-gradient-to-r from-brand-orange/20 to-transparent border border-brand-orange/20 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-8"
-        >
-          <div>
-            <h4 className="text-2xl font-bold mb-2">Want to integrate AI in your project?</h4>
-            <p className="text-slate-400">Hamari expert team se baat karein aur jaaniye kaise AI aapka kaam aasaan kar sakta hai.</p>
-          </div>
-          <button className="bg-brand-orange text-brand-dark px-8 py-4 rounded-xl font-bold hover:bg-orange-400 transition-colors whitespace-nowrap">
-            Explore 100+ Features
-          </button>
-        </motion.div>
       </div>
     </section>
   );
@@ -3622,10 +3828,10 @@ const ProductDetailPage = ({ product, onBack, onOpenSizeSelection }: { product: 
   );
 };
 
-const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelection }: { onOpenQuote: () => void; onProductSelect: (product: CPVCProduct) => void; onBack: () => void; onOpenSizeSelection: (product: CPVCProduct) => void }) => {
+const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelection, initialSearchQuery = '' }: { onOpenQuote: () => void; onProductSelect: (product: CPVCProduct) => void; onBack: () => void; onOpenSizeSelection: (product: CPVCProduct) => void; initialSearchQuery?: string }) => {
   const [selectedBrand, setSelectedBrand] = useState('Astral');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [selectedSize, setSelectedSize] = useState('All');
   const [selectedPressure, setSelectedPressure] = useState('All');
   const [dbProducts, setDbProducts] = useState<CPVCProduct[]>([]);
@@ -3639,6 +3845,10 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
     { name: 'Finolex', sub: 'Coming Soon' },
     { name: 'Supreme', sub: 'LifeLine' },
   ];
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery);
+  }, [initialSearchQuery]);
 
   useEffect(() => {
     const q = query(collection(db, 'products'));
@@ -5078,10 +5288,14 @@ const CPVCPipesPage = ({ onOpenQuote, onProductSelect, onBack, onOpenSizeSelecti
 
   // Filtered products
   const filteredProducts = allProducts.filter(product => {
+    const isSearchActive = searchQuery.trim().length > 0;
+    
     const matchesSearch = (product.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (product.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
-    const matchesBrand = product.brand === selectedBrand;
+    
+    // When searching, ignore the brand tab selection so users can find products across all brands
+    const matchesBrand = isSearchActive ? true : product.brand === selectedBrand;
     
     const matchesSize = selectedSize === 'All' || 
                         product.size === selectedSize || 
@@ -5343,6 +5557,7 @@ export default function App() {
   const [quoteMessage, setQuoteMessage] = useState('');
   const [quoteItemCount, setQuoteItemCount] = useState(0);
   const [astralInitialCollection, setAstralInitialCollection] = useState('All');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
   const handleLogin = async () => {
     try {
@@ -5366,6 +5581,11 @@ export default function App() {
     setAstralInitialCollection(collection);
     setCurrentView(view);
   };
+
+  // Scroll to top whenever currentView changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentView]);
 
   const handleOpenSizeSelection = (product: CPVCProduct) => {
     setProductForQuote(product);
@@ -5543,13 +5763,24 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <Hero onOpenQuote={() => setIsQuoteModalOpen(true)} />
+                <Hero 
+                  onOpenQuote={() => setIsQuoteModalOpen(true)} 
+                  onSearch={(query) => {
+                    setGlobalSearchQuery(query);
+                    setCurrentView('CPVC_PIPES');
+                  }}
+                  onExplore={() => {
+                    setGlobalSearchQuery('');
+                    setCurrentView('CPVC_PIPES');
+                  }}
+                />
                 <ProductRange onViewChange={handleViewChange} />
                 <PopularFittings />
                 <TopBrands />
                 <ServiceArea />
                 <WhyUs onViewChange={setCurrentView} />
-                <SmartAISolutions />
+                <HowWeWork />
+                <TrustTestimonials />
               </motion.div>
             ) : currentView === 'CPVC_PIPES' ? (
               <motion.div
@@ -5567,6 +5798,7 @@ export default function App() {
                   }}
                   onBack={() => setCurrentView('HOME')}
                   onOpenSizeSelection={handleOpenSizeSelection}
+                  initialSearchQuery={globalSearchQuery}
                 />
               </motion.div>
             ) : currentView === 'ANJUL_SANITARYWARE' ? (
